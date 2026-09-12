@@ -58,7 +58,7 @@ function DisclaimerFooter({ theme }) {
     <>
       <div className={`border-t ${bgClass} mt-8 px-6 py-6 text-center text-xs`}>
         <p className="mb-2">
-          <strong>© 2026 Kalyani Embroidery</strong> | Private Property
+          <strong>© 2024 Kalyani Embroidery</strong> | Private Property
         </p>
         <p className="mb-3 text-opacity-75">
           Developed by <strong>Santanu Ghorai</strong> | 
@@ -93,7 +93,7 @@ function DisclaimerFooter({ theme }) {
 }
 
 /* ============================================================
-   LOGIN SCREEN
+   LOGIN SCREEN (Background set to your shop image with dark overlay)
    ============================================================ */
 function LoginScreen({ onLogin }) {
   const [userId, setUserId]     = useState('');
@@ -122,8 +122,13 @@ function LoginScreen({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 flex-col">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
+    <div className="min-h-screen relative flex items-center justify-center px-4 flex-col bg-cover bg-center"
+         style={{ backgroundImage: `url('WhatsApp Image 2026-09-13 at 3.54.27 AM.jpeg')` }}>
+      
+      {/* Dark overlay so the login card stands out cleanly against the photo background */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
+
+      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-white/20">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">🧾</div>
           <h1 className="text-2xl font-bold text-gray-900">Kalyani Embroidery</h1>
@@ -142,17 +147,17 @@ function LoginScreen({ onLogin }) {
             <input type="text" value={userId} required
               onChange={(e) => setUserId(e.target.value.replace(/[^a-zA-Z]/g, ''))}
               autoComplete="username" placeholder="e.g. username"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input type="password" value={password} required
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password" placeholder="••••••••"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
           </div>
           <button type="submit" disabled={busy}
-            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors">
+            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors shadow">
             {busy ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
@@ -165,7 +170,9 @@ function LoginScreen({ onLogin }) {
         </div>
       </div>
       
-      <DisclaimerFooter theme="light" />
+      <div className="relative z-10 w-full max-w-xl">
+        <DisclaimerFooter theme="dark" />
+      </div>
     </div>
   );
 }
@@ -319,8 +326,6 @@ function BillingDashboard({ session, onLogout }) {
   const [bills, setBills]         = useState([]);
   const [error, setError]         = useState('');
   const [searchTerm, setSearch]   = useState('');
-  
-  // Theme state: loaded from localStorage (default to 'light')
   const [theme, setTheme]         = useState(() => {
     return localStorage.getItem(THEME_KEY) || 'light';
   });
@@ -330,7 +335,6 @@ function BillingDashboard({ session, onLogout }) {
   const [editingId, setEditingId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Profile Modal & Avatar upload state
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(() => {
     return localStorage.getItem(PROFILE_AVATAR_KEY + user.user_id) || '';
@@ -342,7 +346,6 @@ function BillingDashboard({ session, onLogout }) {
   });
   const [formError, setFormError] = useState('');
 
-  // Live time ticker only (auto theme change removed so user can manually choose)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -350,7 +353,6 @@ function BillingDashboard({ session, onLogout }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Handle theme switch and save to localStorage
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
@@ -446,14 +448,12 @@ function BillingDashboard({ session, onLogout }) {
     window.open(`https://wa.me/${bill.phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // Logout with confirmation notice
   const confirmAndLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       onLogout();
     }
   };
 
-  // Profile Photo Upload Handler
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -472,7 +472,6 @@ function BillingDashboard({ session, onLogout }) {
     localStorage.removeItem(PROFILE_AVATAR_KEY + user.user_id);
   };
 
-  // Determine Greeting based on time of day
   const hours = currentTime.getHours();
   let greetingText = 'Good Night 🌙';
   if (hours >= 5 && hours < 12) {
@@ -491,12 +490,10 @@ function BillingDashboard({ session, onLogout }) {
 
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300`}>
-      {/* HEADER WITH PROFILE SECTION & LOGOUT */}
       <div className={`border-b shadow-sm ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             
-            {/* Left: Greeting & Live Time */}
             <div className="text-center md:text-left w-full md:w-auto">
               <div className="flex items-center justify-center md:justify-start gap-2">
                 <span className="text-xl">👋</span>
@@ -507,7 +504,6 @@ function BillingDashboard({ session, onLogout }) {
               </p>
             </div>
 
-            {/* Right: Search, Theme Toggle, Profile Badge & Logout */}
             <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-3 w-full md:w-auto">
               <div className={`w-full sm:w-52 ${cardClass} border rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-inner`}>
                 <span className="text-gray-400">🔍</span>
@@ -517,14 +513,12 @@ function BillingDashboard({ session, onLogout }) {
                   className={`w-full outline-none bg-transparent text-sm`} />
               </div>
 
-              {/* Manual Theme Switcher Button */}
               <button onClick={toggleTheme}
                 title="Switch Theme"
                 className={`p-2 rounded-lg ${cardClass} border text-sm font-semibold hover:opacity-80`}>
                 {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
               </button>
 
-              {/* Profile Badge */}
               <div onClick={() => setShowProfileModal(true)}
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition hover:opacity-80 ${theme === 'dark' ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-100 border-gray-300'}`}
                 title="Click to manage profile photo">
@@ -543,7 +537,6 @@ function BillingDashboard({ session, onLogout }) {
                 </div>
               </div>
 
-              {/* Logout Button with Confirmation Notice */}
               <button onClick={confirmAndLogout}
                 className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 shadow transition-all">
                 Logout ⏏️
@@ -554,7 +547,6 @@ function BillingDashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* PROFILE PHOTO UPLOAD MODAL */}
       {showProfileModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className={`${cardClass} border rounded-xl max-w-sm w-full p-6 shadow-2xl relative`}>
@@ -599,7 +591,6 @@ function BillingDashboard({ session, onLogout }) {
         </div>
       )}
 
-      {/* MAIN CONTAINER */}
       <div className="w-full max-w-7xl mx-auto px-2 sm:px-6 py-6 flex-grow">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{error}</div>
@@ -659,7 +650,6 @@ function BillingDashboard({ session, onLogout }) {
           </div>
         )}
 
-        {/* BILLS TABLE SECTION */}
         <div className={`${cardClass} border rounded-lg overflow-hidden shadow-sm`}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm whitespace-nowrap">
@@ -712,7 +702,6 @@ function BillingDashboard({ session, onLogout }) {
           </div>
         </div>
 
-        {/* STATS CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
           <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm`}>
             <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Bills</p>
@@ -729,7 +718,6 @@ function BillingDashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* FOOTER WITH DISCLAIMER */}
       <DisclaimerFooter theme={theme} />
     </div>
   );
