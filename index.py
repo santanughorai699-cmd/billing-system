@@ -20,7 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+def hash_pw(password):
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 # ---------------------------------------------------------
 # DATABASE SETUP
 # ---------------------------------------------------------
