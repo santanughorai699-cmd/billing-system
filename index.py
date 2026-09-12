@@ -69,8 +69,8 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
         default_users = {
-            "Samaresh": {"password": hash_pw("s1"), "role": "admin", "name": "Administrator"},
-            "Bimal": {"password": hash_pw("b2"), "role": "employee", "name": "Bimal Das"},
+            "Samaresh": {"password": hash_pw("s1"), "role": "admin", "name": "Samaresh"},
+            "Bimal": {"password": hash_pw("b2"), "role": "employee", "name": "Bimal"},
             "Susama": {"password": hash_pw("s3"), "role": "employee", "name": "Susama"},
         }
         for user_id, data in default_users.items():
