@@ -8,6 +8,27 @@
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  /* Custom Smooth Animation Utilities */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scaleUp {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.35s ease-out forwards;
+  }
+  .animate-scale-up {
+    animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  /* Smooth transitions for interactive elements */
+  * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  }
+</style>
 </head>
 <body class="bg-white">
 <div id="root"></div>
@@ -40,7 +61,6 @@ async function api(path, { method = 'GET', body, token } = {}) {
   return data;
 }
 
-// Input validation helpers
 const validateName = (name) => /^[a-zA-Z\s]*$/.test(name);
 const validateUserId = (userId) => /^[a-zA-Z]*$/.test(userId);
 const validatePhone = (phone) => /^[0-9]*$/.test(phone) && phone.length <= 10;
@@ -55,45 +75,43 @@ function DisclaimerFooter({ theme }) {
   const linkClass = theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700';
   
   return (
-    <>
-      <div className={`border-t ${bgClass} mt-8 px-6 py-6 text-center text-xs`}>
-        <p className="mb-2">
-          <strong>© 2026 Kalyani Embroidery</strong> | Private Property
-        </p>
-        <p className="mb-3 text-opacity-75">
-          Developed by <strong>Santanu Ghorai</strong> | 
-          <a href="mailto:santanughorai699@gmail.com" className={`ml-1 ${linkClass}`}>
-            santanughorai699@gmail.com
-          </a>
-        </p>
-        <button
-          onClick={() => setShowDisclaimer(!showDisclaimer)}
-          className={`text-opacity-60 hover:text-opacity-100 transition-all ${linkClass} underline`}
-        >
-          {showDisclaimer ? '▼ Hide Disclaimer' : '▶ View Disclaimer'}
-        </button>
-        
-        {showDisclaimer && (
-          <div className={`mt-4 p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} border text-left text-xs leading-relaxed`}>
-            <h4 className="font-bold mb-2">⚠️ Disclaimer & Legal Notice</h4>
-            <ul className="space-y-2 text-opacity-75">
-              <li><strong>Property Rights:</strong> This Bill Management System is the private and confidential property of Kalyani Embroidery. All rights reserved.</li>
-              <li><strong>Authorized Access Only:</strong> This system is intended for authorized employees of Kalyani Embroidery only. Unauthorized access or use is strictly prohibited.</li>
-              <li><strong>Data Confidentiality:</strong> All customer and business data processed through this system is confidential and must be kept secure.</li>
-              <li><strong>License:</strong> This software is licensed for use by Kalyani Embroidery and may not be reproduced, modified, or distributed without explicit written permission.</li>
-              <li><strong>Developer:</strong> Built and maintained by Santanu Ghorai. For technical support or contract inquiries, contact: <a href="mailto:santanughorai699@gmail.com" className={linkClass}>santanughorai699@gmail.com</a></li>
-              <li><strong>Liability:</strong> The developers and Kalyani Embroidery are not responsible for unauthorized data breaches or misuse by non-authorized personnel.</li>
-              <li><strong>Version:</strong> Bill Management System v1.0.0 | Last Updated: 2026</li>
-            </ul>
-          </div>
-        )}
-      </div>
-    </>
+    <div className={`border-t ${bgClass} mt-8 px-6 py-6 text-center text-xs animate-fade-in`}>
+      <p className="mb-2">
+        <strong>© 2024 Kalyani Embroidery</strong> | Private Property
+      </p>
+      <p className="mb-3 text-opacity-75">
+        Developed by <strong>Santanu Ghorai</strong> | 
+        <a href="mailto:santanughorai699@gmail.com" className={`ml-1 ${linkClass}`}>
+          santanughorai699@gmail.com
+        </a>
+      </p>
+      <button
+        onClick={() => setShowDisclaimer(!showDisclaimer)}
+        className={`text-opacity-60 hover:text-opacity-100 transition-all ${linkClass} underline`}
+      >
+        {showDisclaimer ? '▼ Hide Disclaimer' : '▶ View Disclaimer'}
+      </button>
+      
+      {showDisclaimer && (
+        <div className={`mt-4 p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} border text-left text-xs leading-relaxed animate-fade-in`}>
+          <h4 className="font-bold mb-2">⚠️ Disclaimer & Legal Notice</h4>
+          <ul className="space-y-2 text-opacity-75">
+            <li><strong>Property Rights:</strong> This Bill Management System is the private and confidential property of Kalyani Embroidery. All rights reserved.</li>
+            <li><strong>Authorized Access Only:</strong> This system is intended for authorized employees of Kalyani Embroidery only. Unauthorized access or use is strictly prohibited.</li>
+            <li><strong>Data Confidentiality:</strong> All customer and business data processed through this system is confidential and must be kept secure.</li>
+            <li><strong>License:</strong> This software is licensed for use by Kalyani Embroidery and may not be reproduced, modified, or distributed without explicit written permission.</li>
+            <li><strong>Developer:</strong> Built and maintained by Santanu Ghorai. For technical support or contract inquiries, contact: <a href="mailto:santanughorai699@gmail.com" className={linkClass}>santanughorai699@gmail.com</a></li>
+            <li><strong>Liability:</strong> The developers and Kalyani Embroidery are not responsible for unauthorized data breaches or misuse by non-authorized personnel.</li>
+            <li><strong>Version:</strong> Bill Management System v1.0.0 | Last Updated: 2026</li>
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
 /* ============================================================
-   LOGIN SCREEN (Background set to your shop image with dark overlay)
+   LOGIN SCREEN
    ============================================================ */
 function LoginScreen({ onLogin }) {
   const [userId, setUserId]     = useState('');
@@ -125,18 +143,17 @@ function LoginScreen({ onLogin }) {
     <div className="min-h-screen relative flex items-center justify-center px-4 flex-col bg-cover bg-center"
          style={{ backgroundImage: `url('WhatsApp Image 2026-09-13 at 3.54.27 AM.jpeg')` }}>
       
-      {/* Dark overlay so the login card stands out cleanly against the photo background */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
 
-      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-white/20">
+      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-white/20 animate-scale-up">
         <div className="text-center mb-8">
-          <div className="text-4xl mb-2">🧾</div>
+          <div className="text-4xl mb-2 animate-bounce">🧾</div>
           <h1 className="text-2xl font-bold text-gray-900">Kalyani Embroidery</h1>
           <p className="text-sm text-gray-500 mt-1">Bill Management System</p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 animate-fade-in">
             {error}
           </div>
         )}
@@ -157,7 +174,7 @@ function LoginScreen({ onLogin }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
           </div>
           <button type="submit" disabled={busy}
-            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors shadow">
+            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 transition-all shadow">
             {busy ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
@@ -248,11 +265,11 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
   };
 
   return (
-    <div className={`${cardClass} border rounded-lg p-6 mb-6 shadow-sm`}>
+    <div className={`${cardClass} border rounded-lg p-6 mb-6 shadow-sm animate-fade-in`}>
       <h2 className="text-lg font-bold mb-4">👥 Manage Users</h2>
 
-      {error  && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-      {notice && <div className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</div>}
+      {error  && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 animate-fade-in">{error}</div>}
+      {notice && <div className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700 animate-fade-in">{notice}</div>}
 
       <form onSubmit={createUser} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <input type="text" placeholder="User ID (letters)" required value={form.user_id}
@@ -266,7 +283,7 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
           <option value="admin">Admin</option>
         </select>
         <button type="submit"
-          className="col-span-1 sm:col-span-2 md:col-span-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium">
+          className="col-span-1 sm:col-span-2 md:col-span-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 hover:scale-[1.01] active:scale-[0.99] transition-all font-medium">
           + Create User
         </button>
       </form>
@@ -283,7 +300,7 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
           </thead>
           <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
             {users.map((u) => (
-              <tr key={u.user_id}>
+              <tr key={u.user_id} className="hover:bg-blue-500/5 transition-colors">
                 <td className="px-4 py-2 font-mono">{u.user_id}</td>
                 <td className="px-4 py-2">{u.name}</td>
                 <td className="px-4 py-2">
@@ -293,17 +310,17 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
                 </td>
                 <td className="px-4 py-2 space-y-1 sm:space-y-0 sm:space-x-2 flex flex-col sm:flex-row">
                   <button onClick={() => resetPassword(u.user_id)}
-                    className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs">
+                    className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 hover:scale-105 transition-all text-xs">
                     Reset Password
                   </button>
                   <button onClick={() => toggleRole(u.user_id, u.role === 'admin' ? 'employee' : 'admin')}
-                    className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-xs">
+                    className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 hover:scale-105 transition-all text-xs">
                     Make {u.role === 'admin' ? 'Employee' : 'Admin'}
                   </button>
                   <button onClick={() => removeUser(u.user_id)}
                     disabled={u.user_id === currentUserId}
                     title={u.user_id === currentUserId ? "You can't delete yourself" : 'Delete user'}
-                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs disabled:opacity-40 disabled:cursor-not-allowed">
+                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 hover:scale-105 transition-all text-xs disabled:opacity-40 disabled:cursor-not-allowed">
                     Delete
                   </button>
                 </td>
@@ -489,14 +506,14 @@ function BillingDashboard({ session, onLogout }) {
   }`;
 
   return (
-    <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300`}>
+    <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300 animate-fade-in`}>
       <div className={`border-b shadow-sm ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             
             <div className="text-center md:text-left w-full md:w-auto">
               <div className="flex items-center justify-center md:justify-start gap-2">
-                <span className="text-xl">👋</span>
+                <span className="text-xl animate-bounce">👋</span>
                 <h1 className="text-xl sm:text-2xl font-bold">{greetingText}, {user.name}</h1>
               </div>
               <p className={`text-xs sm:text-sm mt-0.5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -515,12 +532,12 @@ function BillingDashboard({ session, onLogout }) {
 
               <button onClick={toggleTheme}
                 title="Switch Theme"
-                className={`p-2 rounded-lg ${cardClass} border text-sm font-semibold hover:opacity-80`}>
+                className={`p-2 rounded-lg ${cardClass} border text-sm font-semibold hover:scale-105 active:scale-95 transition-all`}>
                 {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
               </button>
 
               <div onClick={() => setShowProfileModal(true)}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition hover:opacity-80 ${theme === 'dark' ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-100 border-gray-300'}`}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer hover:scale-105 transition-all ${theme === 'dark' ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-100 border-gray-300'}`}
                 title="Click to manage profile photo">
                 <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-gray-300 border border-gray-400">
                   {avatarUrl ? (
@@ -538,7 +555,7 @@ function BillingDashboard({ session, onLogout }) {
               </div>
 
               <button onClick={confirmAndLogout}
-                className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 shadow transition-all">
+                className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 hover:scale-105 active:scale-95 shadow transition-all">
                 Logout ⏏️
               </button>
             </div>
@@ -548,15 +565,15 @@ function BillingDashboard({ session, onLogout }) {
       </div>
 
       {showProfileModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className={`${cardClass} border rounded-xl max-w-sm w-full p-6 shadow-2xl relative`}>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className={`${cardClass} border rounded-xl max-w-sm w-full p-6 shadow-2xl relative animate-scale-up`}>
             <button onClick={() => setShowProfileModal(false)}
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-lg">✕</button>
             
             <h3 className="text-lg font-bold mb-4 text-center">🖼️ Profile Photo Settings</h3>
             
             <div className="flex flex-col items-center justify-center mb-6">
-              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-blue-500 shadow-md mb-3 bg-gray-200 flex items-center justify-center">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-blue-500 shadow-md mb-3 bg-gray-200 flex items-center justify-center hover:scale-105 transition-transform">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
                 ) : (
@@ -571,19 +588,19 @@ function BillingDashboard({ session, onLogout }) {
 
             <div className="space-y-2">
               <button onClick={() => fileInputRef.current.click()}
-                className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 shadow">
+                className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 hover:scale-[1.02] shadow transition-all">
                 📷 Upload New Photo
               </button>
 
               {avatarUrl && (
                 <button onClick={removeAvatar}
-                  className="w-full py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 shadow">
+                  className="w-full py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 hover:scale-[1.02] shadow transition-all">
                   🗑️ Remove Current Photo
                 </button>
               )}
 
               <button onClick={() => setShowProfileModal(false)}
-                className={`w-full py-2 rounded-lg font-medium text-sm border ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
+                className={`w-full py-2 rounded-lg font-medium text-sm border hover:scale-[1.02] transition-all ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
                 Close
               </button>
             </div>
@@ -593,18 +610,18 @@ function BillingDashboard({ session, onLogout }) {
 
       <div className="w-full max-w-7xl mx-auto px-2 sm:px-6 py-6 flex-grow">
         {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{error}</div>
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm animate-fade-in">{error}</div>
         )}
 
         <div className="mb-6 flex flex-wrap gap-3">
           <button onClick={() => { resetForm(); setShowForm(!showForm); }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm shadow">
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hover:scale-105 active:scale-95 font-medium text-sm shadow transition-all">
             {showForm ? '✕ Cancel' : '+ Add New Bill'}
           </button>
 
           {isAdmin && (
             <button onClick={() => setShowUsers(!showUsers)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm shadow">
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 hover:scale-105 active:scale-95 font-medium text-sm shadow transition-all">
               {showUsers ? '✕ Close Users' : '👥 Manage Users'}
             </button>
           )}
@@ -616,11 +633,11 @@ function BillingDashboard({ session, onLogout }) {
         )}
 
         {showForm && (
-          <div className={`${cardClass} border rounded-lg p-4 sm:p-6 mb-6 shadow-md`}>
+          <div className={`${cardClass} border rounded-lg p-4 sm:p-6 mb-6 shadow-md animate-scale-up`}>
             <h2 className="text-lg font-bold mb-4">{editingId ? 'Edit Bill' : 'Add New Bill'}</h2>
             
             {formError && (
-              <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</div>
+              <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 animate-fade-in">{formError}</div>
             )}
             
             <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -643,14 +660,14 @@ function BillingDashboard({ session, onLogout }) {
               <input type="number" placeholder="Advance Payment (₹)" value={formData.down}
                 onChange={(e) => setFormData({ ...formData, down: e.target.value })} className={inputClass} />
               <button type="submit"
-                className="px-4 py-2.5 bg-green-600 text-white rounded hover:bg-green-700 font-medium col-span-1 sm:col-span-2 shadow">
+                className="px-4 py-2.5 bg-green-600 text-white rounded hover:bg-green-700 hover:scale-[1.01] active:scale-[0.99] transition-all font-medium col-span-1 sm:col-span-2 shadow">
                 {editingId ? '✓ Update Bill' : '✓ Save Bill'}
               </button>
             </form>
           </div>
         )}
 
-        <div className={`${cardClass} border rounded-lg overflow-hidden shadow-sm`}>
+        <div className={`${cardClass} border rounded-lg overflow-hidden shadow-sm animate-fade-in`}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm whitespace-nowrap">
               <thead className={theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'}>
@@ -669,7 +686,7 @@ function BillingDashboard({ session, onLogout }) {
               </thead>
               <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
                 {filteredBills.length > 0 ? filteredBills.map((bill) => (
-                  <tr key={bill.id} className={theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}>
+                  <tr key={bill.id} className={`${theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'} transition-colors`}>
                     <td className="px-3 sm:px-4 py-3">{bill.name}</td>
                     <td className="px-3 sm:px-4 py-3 font-mono">+{bill.phone}</td>
                     <td className="px-3 sm:px-4 py-3 font-semibold">{bill.billNo}</td>
@@ -682,12 +699,12 @@ function BillingDashboard({ session, onLogout }) {
                     <td className="px-3 sm:px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         <button onClick={() => handleEdit(bill)}
-                          className="px-2.5 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">Edit</button>
+                          className="px-2.5 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 hover:scale-105 transition-all text-xs">Edit</button>
                         <button onClick={() => sendWhatsApp(bill)}
-                          className="px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs">💬 WA</button>
+                          className="px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700 hover:scale-105 transition-all text-xs">💬 WA</button>
                         {isAdmin && (
                           <button onClick={() => handleDelete(bill.id)}
-                            className="px-2.5 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs">Delete</button>
+                            className="px-2.5 py-1 bg-red-600 text-white rounded hover:bg-red-700 hover:scale-105 transition-all text-xs">Delete</button>
                         )}
                       </div>
                     </td>
@@ -703,15 +720,15 @@ function BillingDashboard({ session, onLogout }) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-          <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm`}>
+          <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm hover:scale-[1.01] transition-transform`}>
             <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Bills</p>
             <p className="text-xl sm:text-2xl font-bold mt-2">{filteredBills.length}</p>
           </div>
-          <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm`}>
+          <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm hover:scale-[1.01] transition-transform`}>
             <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Amount</p>
             <p className="text-xl sm:text-2xl font-bold mt-2">₹{filteredBills.reduce((s, b) => s + b.amount, 0)}</p>
           </div>
-          <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm`}>
+          <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm hover:scale-[1.01] transition-transform`}>
             <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Pending</p>
             <p className="text-xl sm:text-2xl font-bold text-red-500 mt-2">₹{filteredBills.reduce((s, b) => s + b.pending, 0)}</p>
           </div>
@@ -766,7 +783,7 @@ function App() {
   };
 
   if (checking) return (
-    <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>
+    <div className="min-h-screen flex items-center justify-center text-gray-500 animate-pulse">Loading…</div>
   );
 
   if (!session) return <LoginScreen onLogin={handleLogin} />;
