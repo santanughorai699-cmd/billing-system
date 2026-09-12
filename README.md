@@ -1,251 +1,276 @@
-# 🧾 Better Bill System
+# Kalyani Embroidery Bill Management System - Updated
 
-A complete billing management system with FastAPI backend and React frontend. Admin can manage users and see all bills, while employees can only manage their own bills.
+## ✨ Updates Made
 
-## 📦 Features
+### 1. **Name Validation** ✓
+- Only **letters and spaces** allowed
+- No numbers or special characters
+- Real-time validation on input
 
-✅ **User Management** (Admin only)
-- Create, update, delete users
-- Reset passwords
-- Toggle user roles (Admin/Employee)
+### 2. **User ID Validation** ✓
+- Only **letters** allowed
+- No numbers or special characters
+- Example: `Samaresh`, `Bimal`, `Susama`
 
-✅ **Bill Management**
-- Create, edit, update bills
-- Search bills by name, bill number, or phone
-- View bill details (total, advance, pending)
-- Send WhatsApp messages to customers
-- Admin sees all bills; employees see only their own
+### 3. **Phone Number Validation** ✓
+- **India only** (+91 country code)
+- Only **10 digits** accepted
+- Numbers only (no dashes, spaces, or symbols)
+- Automatically adds +91 prefix to saved data
 
-✅ **Authentication**
-- Session-based login/logout
-- Bearer token authentication
-- Protected endpoints
+### 4. **Database Persistence** ✓
+- All bills are **saved to SQLite database** (`billing_system.db`)
+- Data persists even after server restart
+- No data loss when server stops
 
-✅ **UI/UX**
-- Responsive dark/light theme
-- Beautiful Tailwind CSS styling
-- Real-time search and filtering
-- Statistics dashboard
+### 5. **Smart Bill Management** ✓
+- Bills are automatically saved when created or updated
+- No manual save required
+- Only admin can delete bills
+- All operations are persistent
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Installation & Setup
 
-### 1. **Install Dependencies**
-
+### Step 1: Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install fastapi uvicorn pydantic
 ```
 
-### 2. **Run the Server**
+### Step 2: Replace Files
+- Replace old `index.py` with the new **updated `index.py`**
+- Replace old `index.html` with the new **`index_updated.html`**
+- Rename `index_updated.html` to `index.html`
 
+```bash
+# If in the same directory:
+cp index_updated.html index.html
+```
+
+### Step 3: Run the Server
 ```bash
 python index.py
 ```
 
-The app will start at: **http://localhost:8000**
-
-### 3. **Login**
-
-Use one of the default accounts:
-
-| User ID | Password | Role |
-|---------|----------|------|
-| admin | admin123 | 🛡️ Admin |
-| ravi | ravi@123 | 👤 Employee |
-| priya | priya@123 | 👤 Employee |
-| amit | amit@123 | 👤 Employee |
+The server will start at: **http://localhost:8000**
 
 ---
 
-## 📂 Project Structure
+## 📱 Default Login Accounts
 
+| Role | User ID | Password |
+|------|---------|----------|
+| 🛡️ Admin | `Samaresh` | `s1` |
+| 👤 Employee | `Bimal` | `b2` |
+| 👤 Employee | `Susama` | `s3` |
+
+---
+
+## ✅ Features Summary
+
+### Input Validation
 ```
-.
-├── index.py           # FastAPI backend server
-├── index.html         # React frontend (embedded)
-├── requirements.txt   # Python dependencies
-└── README.md          # This file
+✓ Name Field
+  - Letters and spaces only
+  - No numbers allowed
+  - Example: "John Doe" ✓, "John123" ✗
+
+✓ User ID Field
+  - Letters only
+  - No numbers allowed
+  - Example: "Samaresh" ✓, "Samaresh123" ✗
+
+✓ Phone Field
+  - 10 digits only (India)
+  - No country code needed (auto-adds +91)
+  - Example: "9876543210" → Stored as "919876543210"
+  - Display: "+919876543210"
 ```
 
----
+### Database Storage
+- **SQLite database**: `billing_system.db`
+- Tables:
+  - `users` - User accounts and roles
+  - `bills` - All bill records
+  - `sessions` - User login sessions
 
-## 🔑 Key Credentials
-
-### Admin Account
-- **User ID:** `admin`
-- **Password:** `admin123`
-- **Access:** Can manage users, see all bills, delete bills
-
-### Employee Accounts
-- **ravi** / `ravi@123`
-- **priya** / `priya@123`
-- **amit** / `amit@123`
-- **Access:** Can create/edit their own bills only
+### Auto-Save Feature
+- Bills save automatically when created
+- Bills save automatically when updated
+- No additional "Save" action needed
+- Pending amount auto-calculated
 
 ---
 
-## 🎯 Admin Features
+## 🔐 Security Features
 
-1. **👥 Manage Users**
-   - Create new users (admin or employee)
-   - Reset user passwords
-   - Promote/demote users
-   - Delete users
+1. **Password Hashing**: SHA256 encryption
+2. **Session Tokens**: Secure token-based auth
+3. **Role-Based Access**:
+   - Admins: See all bills, manage users
+   - Employees: See only their own bills
+4. **Permission Checks**:
+   - Only admins can delete bills
+   - Employees can only edit their own bills
+   - Users can't delete themselves
 
-2. **📊 Dashboard**
-   - See all bills from all employees
-   - Filter/search bills
-   - Edit or delete any bill
-   - View created_by column
+---
 
-3. **📱 Communication**
-   - Send WhatsApp messages to customers with bill details
+## 📊 Admin Features
+
+### User Management
+- ✓ Create new users
+- ✓ Reset passwords
+- ✓ Toggle role (Admin ↔ Employee)
+- ✓ Delete users
+- ✓ View all users
+
+### Bill Management
+- ✓ View all employee bills
+- ✓ Edit any bill
+- ✓ Delete bills
+- ✓ See who created each bill
 
 ---
 
 ## 👤 Employee Features
 
-1. **📋 Manage Bills**
-   - Create new bills
-   - Edit own bills only
-   - Cannot delete bills (admin only)
+### Bill Management
+- ✓ Create own bills
+- ✓ Edit own bills
+- ✓ View own bills
+- ✓ Send WhatsApp messages
+- ✓ View statistics (filtered)
 
-2. **📊 Dashboard**
-   - See only their own bills
-   - Search and filter
-   - View statistics
-
-3. **📱 Communication**
-   - Send WhatsApp messages to customers
-
----
-
-## 🔒 Security Features
-
-- Passwords hashed with SHA-256
-- Bearer token-based session management
-- Role-based access control (RBAC)
-- CORS enabled for cross-origin requests
-- Protected endpoints with dependency injection
+### Limitations
+- ✗ Cannot delete bills
+- ✗ Cannot see other employees' bills
+- ✗ Cannot manage users
 
 ---
 
-## 📝 API Endpoints
+## 🐛 Troubleshooting
 
-### Authentication
-```
-POST   /api/login              # Login
-POST   /api/logout             # Logout
-GET    /api/me                 # Current user info
-```
+### "Backend not reachable" Error
+**Solution**: Make sure `python index.py` is running in another terminal
 
-### Bills
-```
-GET    /api/bills              # List bills (role-based)
-POST   /api/bills              # Create bill
-PUT    /api/bills/{id}         # Update bill
-DELETE /api/bills/{id}         # Delete bill (admin only)
-```
+### Phone validation fails
+- Ensure you're entering exactly 10 digits
+- Example: `9876543210` (not `98 7654 3210` or `+919876543210`)
 
-### Users (Admin Only)
-```
-GET    /api/users              # List all users
-POST   /api/users              # Create user
-PUT    /api/users/{id}         # Update user role
-PUT    /api/users/{id}/password # Reset password
-DELETE /api/users/{id}         # Delete user
-```
+### Name validation fails
+- Use only letters (A-Z, a-z)
+- Spaces are allowed
+- Example: `John Doe` ✓, `John-Doe` ✗
 
-### Utility
+### Database issues
+- Delete `billing_system.db` to reset
+- System will auto-create fresh database
+- **Warning**: This will delete all bills!
+
+---
+
+## 📁 File Structure
+
 ```
-GET    /api/health             # Health check
-GET    /                       # Serve frontend
+project_folder/
+├── index.py              ← Backend (FastAPI)
+├── index.html            ← Frontend (React)
+└── billing_system.db     ← SQLite Database (auto-created)
 ```
 
 ---
 
-## 🎨 Customization
+## 🎯 Quick Demo
 
-### Change Default Port
-Edit `index.py` (last line):
-```python
-if __name__ == "__main__":
-    uvicorn.run("index:app", host="0.0.0.0", port=8000, reload=True)  # Change 8000
+### Create a Bill
+1. Login as `Bimal` / `b2`
+2. Click "+ Add New Bill"
+3. Enter:
+   - **Name**: `John Doe` (letters only)
+   - **Phone**: `9876543210` (10 digits, auto +91)
+   - **Bill No**: `B001`
+   - **Item**: `Embroidery Work`
+   - **Amount**: `5000`
+   - **Advance**: `1000`
+4. Click "✓ Save Bill"
+5. Bill is saved to database automatically!
+
+### Send WhatsApp
+1. Click "💬 WA" button on any bill
+2. Pre-filled message opens in WhatsApp
+
+### Admin: Manage Users
+1. Login as `Samaresh` / `s1`
+2. Click "👥 Manage Users"
+3. Create, edit, or delete users
+4. All user IDs must be letters only
+
+---
+
+## 📈 Data Structure
+
+### Bill Record
+```json
+{
+  "id": 1,
+  "name": "John Doe",
+  "phone": "919876543210",
+  "billNo": "B001",
+  "orderTrack": "ORD-001",
+  "item": "Embroidery",
+  "amount": 5000,
+  "down": 1000,
+  "pending": 4000,
+  "created_by": "Bimal",
+  "created_at": "2024-01-15T10:30:00"
+}
 ```
 
-### Add More Demo Bills
-Edit `bills_db` in `index.py`:
-```python
-bills_db = [
-    {"id": 1, "name": "...", ...},
-    # Add more bills here
-]
+### User Record
+```json
+{
+  "user_id": "Samaresh",
+  "name": "Administrator",
+  "role": "admin"
+}
 ```
 
-### Change Colors/Theme
-The frontend uses Tailwind CSS. Edit the color classes in `index.html`:
-- `bg-blue-600` → `bg-green-600`
-- `text-red-600` → `text-orange-600`
+---
+
+## 🔄 Updates Overview
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Storage | In-memory (lost on restart) | SQLite Database (persistent) |
+| Name Input | Any text | Letters & spaces only |
+| User ID | Any text | Letters only |
+| Phone | Any format | 10 digits, +91 India only |
+| Validation | None | Real-time validation |
+| Data Loss | Yes, on restart | No, always saved |
+| Bill Deletion | Anyone | Admin only |
 
 ---
 
-## 🛠️ Troubleshooting
+## 💡 Tips
 
-**Q: Port 8000 already in use?**
-```bash
-# Change port in index.py or kill the process
-lsof -i :8000
-kill -9 <PID>
-```
-
-**Q: Backend not connecting?**
-- Ensure server is running: `python index.py`
-- Check browser console for errors (F12)
-- Verify no CORS issues
-
-**Q: Lost session?**
-- Clear localStorage: Open DevTools → Application → Clear All
-
-**Q: Can't send WhatsApp?**
-- Ensure phone numbers include country code (e.g., +91 for India)
-- WhatsApp must be installed on the device
+1. **Backup Database**: Copy `billing_system.db` regularly
+2. **Change Passwords**: Use admin panel to reset passwords
+3. **Export Data**: Write a script to query SQLite for reports
+4. **Bulk Operations**: SQL scripts can directly manipulate database
 
 ---
 
-## 📦 Requirements
+## 📞 Support
 
-- **Python:** 3.8+
-- **FastAPI:** Web framework
-- **Uvicorn:** ASGI server
-- **Pydantic:** Data validation
-- **React 18:** Frontend (via CDN)
-- **Tailwind CSS:** Styling (via CDN)
+For issues, check:
+1. Backend console for error messages
+2. Browser console (F12) for frontend errors
+3. `billing_system.db` exists in project folder
 
 ---
 
-## 🎓 Learning Resources
-
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [React Hooks Guide](https://react.dev/reference/react)
-- [Tailwind CSS](https://tailwindcss.com/)
-
----
-
-## 📝 License
-
-This project is open source and available for educational purposes.
-
----
-
-## 💬 Support
-
-If you encounter any issues:
-1. Check the error message in browser console
-2. Verify all dependencies are installed
-3. Ensure the server is running on port 8000
-4. Try clearing browser cache and localStorage
-
----
-
-**Happy billing! 🧾**
+**Version**: 2.0 - Database Persistence  
+**Last Updated**: 2024  
+**Status**: ✅ Production Ready
