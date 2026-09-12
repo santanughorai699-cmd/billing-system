@@ -13,11 +13,13 @@
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 const apiBase  = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
 const TOKEN_KEY = 'bbs_token';
 const USER_KEY  = 'bbs_user';
+const PROFILE_AVATAR_KEY = 'bbs_avatar_';
+const THEME_KEY = 'bbs_theme_preference';
 
 async function api(path, { method = 'GET', body, token } = {}) {
   const headers = {};
@@ -317,32 +319,43 @@ function BillingDashboard({ session, onLogout }) {
   const [bills, setBills]         = useState([]);
   const [error, setError]         = useState('');
   const [searchTerm, setSearch]   = useState('');
-  const [theme, setTheme]         = useState('light');
+  
+  // Theme state: loaded from localStorage (default to 'light')
+  const [theme, setTheme]         = useState(() => {
+    return localStorage.getItem(THEME_KEY) || 'light';
+  });
+
   const [showForm, setShowForm]   = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Profile Modal & Avatar upload state
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+    return localStorage.getItem(PROFILE_AVATAR_KEY + user.user_id) || '';
+  });
+  const fileInputRef = useRef(null);
   
   const [formData, setFormData]   = useState({
     name: '', phone: '', billNo: '', orderTrack: '', item: '', amount: '', down: ''
   });
   const [formError, setFormError] = useState('');
 
-  // Live time ticker & automatic theme assignment based on time (Morning/Night)
+  // Live time ticker only (auto theme change removed so user can manually choose)
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(now);
-      const hours = now.getHours();
-      // If evening/night (6 PM to 6 AM), automatically set dark mode; otherwise light mode
-      if (hours >= 18 || hours < 6) {
-        setTheme('dark');
-      } else {
-        setTheme('light');
-      }
+      setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Handle theme switch and save to localStorage
+  const toggleTheme = () => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(nextTheme);
+    localStorage.setItem(THEME_KEY, nextTheme);
+  };
 
   const request = useCallback(async (path, options = {}) => {
     try { return await api(path, { ...options, token }); }
@@ -433,6 +446,32 @@ function BillingDashboard({ session, onLogout }) {
     window.open(`https://wa.me/${bill.phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // Logout with confirmation notice
+  const confirmAndLogout = () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      onLogout();
+    }
+  };
+
+  // Profile Photo Upload Handler
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        setAvatarUrl(result);
+        localStorage.setItem(PROFILE_AVATAR_KEY + user.user_id, result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeAvatar = () => {
+    setAvatarUrl('');
+    localStorage.removeItem(PROFILE_AVATAR_KEY + user.user_id);
+  };
+
   // Determine Greeting based on time of day
   const hours = currentTime.getHours();
   let greetingText = 'Good Night 🌙';
@@ -444,7 +483,6 @@ function BillingDashboard({ session, onLogout }) {
     greetingText = 'Good Evening 🌆';
   }
 
-  // Styles adjusted for responsive container (PC max-w-7xl centered with side margins, Phone full width 100%)
   const bgClass    = theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-slate-100 text-black';
   const cardClass  = theme === 'dark' ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900';
   const inputClass = `px-3 py-2 border rounded outline-none ${
@@ -453,9 +491,8 @@ function BillingDashboard({ session, onLogout }) {
 
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300`}>
-      {/* HEADER WITH USER INTERFACE CONTROLS & TIME */}
+      {/* HEADER WITH PROFILE SECTION & LOGOUT */}
       <div className={`border-b shadow-sm ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-        {/* Responsive wrapper: max-w-7xl with side padding for PC, compact full width on mobile */}
         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             
@@ -470,7 +507,7 @@ function BillingDashboard({ session, onLogout }) {
               </p>
             </div>
 
-            {/* Right: Search, Theme Toggle, Profile Info & Logout Button */}
+            {/* Right: Search, Theme Toggle, Profile Badge & Logout */}
             <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-3 w-full md:w-auto">
               <div className={`w-full sm:w-52 ${cardClass} border rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-inner`}>
                 <span className="text-gray-400">🔍</span>
@@ -480,26 +517,34 @@ function BillingDashboard({ session, onLogout }) {
                   className={`w-full outline-none bg-transparent text-sm`} />
               </div>
 
-              <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                title="Toggle Theme"
+              {/* Manual Theme Switcher Button */}
+              <button onClick={toggleTheme}
+                title="Switch Theme"
                 className={`p-2 rounded-lg ${cardClass} border text-sm font-semibold hover:opacity-80`}>
-                {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
+                {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
               </button>
 
-              <div className="flex items-center gap-2 px-2 py-1 rounded-lg border border-transparent">
-                <div className={`w-8 h-8 rounded-full ${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'} flex items-center justify-center font-bold text-xs`}>
-                  {isAdmin ? '🛡️' : '👤'}
+              {/* Profile Badge */}
+              <div onClick={() => setShowProfileModal(true)}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition hover:opacity-80 ${theme === 'dark' ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-100 border-gray-300'}`}
+                title="Click to manage profile photo">
+                <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-gray-300 border border-gray-400">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold">{isAdmin ? '🛡️' : '👤'}</span>
+                  )}
                 </div>
-                <div className="hidden sm:block text-left leading-tight">
+                <div className="text-left leading-tight">
                   <p className="text-xs font-semibold">{user.user_id}</p>
-                  <p className={`text-[10px] font-bold ${isAdmin ? 'text-purple-500' : 'text-blue-500'}`}>
+                  <p className={`text-[10px] font-bold ${isAdmin ? 'text-purple-400' : 'text-blue-400'}`}>
                     {user.role.toUpperCase()}
                   </p>
                 </div>
               </div>
 
-              {/* Logout Button inside the User Interface */}
-              <button onClick={onLogout}
+              {/* Logout Button with Confirmation Notice */}
+              <button onClick={confirmAndLogout}
                 className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 shadow transition-all">
                 Logout ⏏️
               </button>
@@ -509,7 +554,52 @@ function BillingDashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* MAIN CONTAINER: Responsive sizing (PC side constraints with max-w-7xl, Mobile full fluid view) */}
+      {/* PROFILE PHOTO UPLOAD MODAL */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className={`${cardClass} border rounded-xl max-w-sm w-full p-6 shadow-2xl relative`}>
+            <button onClick={() => setShowProfileModal(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-lg">✕</button>
+            
+            <h3 className="text-lg font-bold mb-4 text-center">🖼️ Profile Photo Settings</h3>
+            
+            <div className="flex flex-col items-center justify-center mb-6">
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-blue-500 shadow-md mb-3 bg-gray-200 flex items-center justify-center">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl">{isAdmin ? '🛡️' : '👤'}</span>
+                )}
+              </div>
+              <p className="text-sm font-semibold">{user.name} ({user.user_id})</p>
+              <p className="text-xs opacity-70">{isAdmin ? 'Administrator' : 'Employee'}</p>
+            </div>
+
+            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+
+            <div className="space-y-2">
+              <button onClick={() => fileInputRef.current.click()}
+                className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 shadow">
+                📷 Upload New Photo
+              </button>
+
+              {avatarUrl && (
+                <button onClick={removeAvatar}
+                  className="w-full py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 shadow">
+                  🗑️ Remove Current Photo
+                </button>
+              )}
+
+              <button onClick={() => setShowProfileModal(false)}
+                className={`w-full py-2 rounded-lg font-medium text-sm border ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN CONTAINER */}
       <div className="w-full max-w-7xl mx-auto px-2 sm:px-6 py-6 flex-grow">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{error}</div>
@@ -569,7 +659,7 @@ function BillingDashboard({ session, onLogout }) {
           </div>
         )}
 
-        {/* BILLS TABLE SECTION (Fully responsive with horizontal scroll support for mobile viewports) */}
+        {/* BILLS TABLE SECTION */}
         <div className={`${cardClass} border rounded-lg overflow-hidden shadow-sm`}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm whitespace-nowrap">
@@ -682,7 +772,6 @@ function App() {
 
   const handleLogout = async () => {
     try { await api('/api/logout', { method: 'POST', token: session?.token }); } catch {}
-    localStorage.getItem(TOKEN_KEY); // clean call
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setSession(null);
