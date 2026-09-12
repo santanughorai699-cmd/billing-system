@@ -255,21 +255,14 @@ def me(user_id: str = Depends(current_user)):
     return {"user_id": user_id, "role": row[0], "name": row[1]}
 
 # ---------------------------------------------------------
-# BILLS (admin sees all, employees see only their own)
+# BILLS (Everyone can view and edit all bills)
 # ---------------------------------------------------------
 @app.get("/api/bills")
 def get_bills(user_id: str = Depends(current_user)):
     conn = get_db()
     c = conn.cursor()
-    
-    c.execute("SELECT role FROM users WHERE user_id = ?", (user_id,))
-    is_admin = c.fetchone()[0] == "admin"
-    
-    if is_admin:
-        c.execute("SELECT id, name, phone, billNo, orderTrack, item, amount, down, pending, created_by FROM bills ORDER BY id DESC")
-    else:
-        c.execute("SELECT id, name, phone, billNo, orderTrack, item, amount, down, pending, created_by FROM bills WHERE created_by = ? ORDER BY id DESC", (user_id,))
-    
+    # Everyone sees all bills now
+    c.execute("SELECT id, name, phone, billNo, orderTrack, item, amount, down, pending, created_by FROM bills ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
     
@@ -309,11 +302,7 @@ def update_bill(bill_id: int, bill: BillInput, user_id: str = Depends(current_us
     conn = get_db()
     c = conn.cursor()
     
-    # Check if admin
-    c.execute("SELECT role FROM users WHERE user_id = ?", (user_id,))
-    is_admin = c.fetchone()[0] == "admin"
-    
-    # Check bill exists and permissions
+    # Check if bill exists
     c.execute("SELECT created_by FROM bills WHERE id = ?", (bill_id,))
     row = c.fetchone()
     
@@ -321,10 +310,7 @@ def update_bill(bill_id: int, bill: BillInput, user_id: str = Depends(current_us
         conn.close()
         raise HTTPException(status_code=404, detail="Bill not found")
     
-    if not is_admin and row[0] != user_id:
-        conn.close()
-        raise HTTPException(status_code=403, detail="You can only edit your own bills")
-    
+    # Anyone (Admin or Employee) can edit any bill now
     pending = max(bill.amount - bill.down, 0)
     c.execute("""UPDATE bills SET name = ?, phone = ?, billNo = ?, orderTrack = ?, item = ?, amount = ?, down = ?, pending = ?
                  WHERE id = ?""",
