@@ -28,10 +28,10 @@ def hash_pw(pw: str) -> str:
 # USERS  ->  1 admin + 3 employees
 # ---------------------------------------------------------
 users_db = {
-    "admin": {"password": hash_pw("admin123"), "role": "admin",    "name": "Administrator"},
-    "ravi":  {"password": hash_pw("ravi@123"),  "role": "employee", "name": "Ravi Kumar"},
-    "priya": {"password": hash_pw("priya@123"), "role": "employee", "name": "Priya Sharma"},
-    "amit":  {"password": hash_pw("amit@123"),  "role": "employee", "name": "Amit Patel"},
+    "Samaresh": {"password": hash_pw("s1"), "role": "admin",    "name": "Administrator"},
+    "Bimal":  {"password": hash_pw("b2"),  "role": "employee", "name": "Bimal Das"},
+    "Susama": {"password": hash_pw("s3"), "role": "employee", "name": "Susama"},
+    "..":  {"password": hash_pw("0"),  "role": "employee", "name": ".."},
 }
 
 sessions = {}   # token  ->  user_id
