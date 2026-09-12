@@ -29,7 +29,7 @@ def hash_pw(pw: str) -> str:
 # ---------------------------------------------------------
 users_db = {
     "Samaresh": {"password": hash_pw("s1"), "role": "admin",    "name": "Administrator"},
-    "Bimal":  {"password": hash_pw("b2"),  "role": "employee", "name": "Bimal Das"},
+    "Bimal":  {"password": hash_pw("b2"),  "role": "employee", "name": "Bimal"},
     "Susama": {"password": hash_pw("s3"), "role": "employee", "name": "Susama"},
     "..":  {"password": hash_pw("0"),  "role": "employee", "name": ".."},
 }
