@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Better Bill System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-white">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const apiBase  = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+const TOKEN_KEY = 'bbs_token';
+const USER_KEY  = 'bbs_user';
+
+async function api(path, { method = 'GET', body, token } = {}) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${apiBase}${path}`, {
+    method, headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const err = new Error(data.detail || `Request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+/* ============================================================
+   LOGIN SCREEN
+   ============================================================ */
+function LoginScreen({ onLogin }) {
+  const [userId, setUserId]     = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]       = useState('');
+  const [busy, setBusy]         = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError('');
+    try {
+      const data = await api('/api/login', {
+        method: 'POST',
+        body: { user_id: userId.trim(), password },
+      });
+      onLogin(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
+        <div className="text-center mb-8">
+          <div className="text-4xl mb-2">🧾</div>
+          <h1 className="text-2xl font-bold text-gray-900">Better Bill System</h1>
+          <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+            <input type="text" value={userId} required
+              onChange={(e) => setUserId(e.target.value)}
+              autoComplete="username" placeholder="e.g. admin"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input type="password" value={password} required
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password" placeholder="••••••••"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <button type="submit" disabled={busy}
+            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors">
+            {busy ? 'Signing in…' : 'Sign In'}
+          </button>
+        </form>
+
+        <div className="mt-6 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <p className="font-semibold text-gray-700 mb-1">Default accounts</p>
+          <p>🛡️ Admin: <span className="font-mono">admin / admin123</span></p>
+          <p>👤 Employee: <span className="font-mono">ravi / ravi@123</span></p>
+          <p>👤 Employee: <span className="font-mono">priya / priya@123</span></p>
+          <p>👤 Employee: <span className="font-mono">amit / amit@123</span></p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   USER MANAGER (ADMIN ONLY)
+   ============================================================ */
+function UserManager({ request, currentUserId, theme, cardClass }) {
+  const [users, setUsers]   = useState([]);
+  const [error, setError]   = useState('');
+  const [notice, setNotice] = useState('');
+  const [form, setForm]     = useState({ user_id: '', password: '', name: '', role: 'employee' });
+
+  const inputClass = `px-3 py-2 border rounded outline-none ${
+    theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+  }`;
+
+  const load = async () => {
+    try { setUsers(await request('/api/users')); setError(''); }
+    catch (err) { setError(err.message); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const createUser = async (e) => {
+    e.preventDefault();
+    setError(''); setNotice('');
+    try {
+      await request('/api/users', { method: 'POST', body: form });
+      setNotice(`User "${form.user_id}" created.`);
+      setForm({ user_id: '', password: '', name: '', role: 'employee' });
+      load();
+    } catch (err) { setError(err.message); }
+  };
+
+  const removeUser = async (id) => {
+    if (!window.confirm(`Delete user "${id}"?`)) return;
+    setError(''); setNotice('');
+    try {
+      await request(`/api/users/${id}`, { method: 'DELETE' });
+      setNotice(`User "${id}" deleted.`);
+      load();
+    } catch (err) { setError(err.message); }
+  };
+
+  const resetPassword = async (id) => {
+    const pw = window.prompt(`New password for "${id}":`);
+    if (!pw) return;
+    setError(''); setNotice('');
+    try {
+      await request(`/api/users/${id}/password`, { method: 'PUT', body: { password: pw } });
+      setNotice(`Password updated for "${id}".`);
+    } catch (err) { setError(err.message); }
+  };
+
+  const toggleRole = async (id, role) => {
+    setError(''); setNotice('');
+    try {
+      await request(`/api/users/${id}`, { method: 'PUT', body: { role } });
+      setNotice(`Role updated for "${id}".`);
+      load();
+    } catch (err) { setError(err.message); }
+  };
+
+  return (
+    <div className={`${cardClass} border rounded-lg p-6 mb-6`}>
+      <h2 className="text-lg font-bold mb-4">👥 Manage Users</h2>
+
+      {error  && <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {notice && <div className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</div>}
+
+      <form onSubmit={createUser} className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <input type="text" placeholder="User ID" required value={form.user_id}
+          onChange={(e) => setForm({ ...form, user_id: e.target.value })} className={inputClass} />
+        <input type="text" placeholder="Full Name" value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} />
+        <input type="text" placeholder="Password" required value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} />
+        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputClass}>
+          <option value="employee">Employee</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button type="submit"
+          className="col-span-2 md:col-span-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium">
+          + Create User
+        </button>
+      </form>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className={theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}>
+            <tr>
+              <th className="px-4 py-2 text-left">User ID</th>
+              <th className="px-4 py-2 text-left">Name</th>
+              <th className="px-4 py-2 text-left">Role</th>
+              <th className="px-4 py-2 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
+            {users.map((u) => (
+              <tr key={u.user_id}>
+                <td className="px-4 py-2 font-mono">{u.user_id}</td>
+                <td className="px-4 py-2">{u.name}</td>
+                <td className="px-4 py-2">
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                    u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                  }`}>{u.role.toUpperCase()}</span>
+                </td>
+                <td className="px-4 py-2 space-x-2">
+                  <button onClick={() => resetPassword(u.user_id)}
+                    className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs">
+                    Reset Password
+                  </button>
+                  <button onClick={() => toggleRole(u.user_id, u.role === 'admin' ? 'employee' : 'admin')}
+                    className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-xs">
+                    Make {u.role === 'admin' ? 'Employee' : 'Admin'}
+                  </button>
+                  <button onClick={() => removeUser(u.user_id)}
+                    disabled={u.user_id === currentUserId}
+                    title={u.user_id === currentUserId ? "You can't delete yourself" : 'Delete user'}
+                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs disabled:opacity-40 disabled:cursor-not-allowed">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function BillingDashboard({ session, onLogout }) {
+  const { token, user } = session;
+  const isAdmin = user.role === 'admin';
+
+  const [bills, setBills]         = useState([]);
+  const [error, setError]         = useState('');
+  const [searchTerm, setSearch]   = useState('');
+  const [theme, setTheme]         = useState('light');
+  const [showForm, setShowForm]   = useState(false);
+  const [showUsers, setShowUsers] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData]   = useState({
+    name: '', phone: '', billNo: '', orderTrack: '', item: '', amount: '', down: ''
+  });
+
+  const request = useCallback(async (path, options = {}) => {
+    try { return await api(path, { ...options, token }); }
+    catch (err) { if (err.status === 401) onLogout(); throw err; }
+  }, [token, onLogout]);
+
+  const loadBills = async () => {
+    try { setBills(await request('/api/bills')); setError(''); }
+    catch (err) {
+      if (err.status !== 401)
+        setError('Backend not reachable. Start it with: python index.py');
+    }
+  };
+
+  useEffect(() => { loadBills(); }, []);
+
+  const filteredBills = bills.filter(b =>
+    b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    b.billNo.includes(searchTerm) ||
+    b.phone.includes(searchTerm)
+  );
+
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({ name: '', phone: '', billNo: '', orderTrack: '', item: '', amount: '', down: '' });
+  };
+
+  const handleEdit = (bill) => {
+    setEditingId(bill.id);
+    setFormData({
+      name: bill.name, phone: bill.phone, billNo: bill.billNo,
+      orderTrack: bill.orderTrack, item: bill.item,
+      amount: bill.amount.toString(), down: bill.down.toString(),
+    });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.phone) return;
+    const payload = {
+      ...formData,
+      amount: parseFloat(formData.amount) || 0,
+      down: parseFloat(formData.down) || 0,
+    };
+    try {
+      await request(`/api/bills${editingId ? `/${editingId}` : ''}`, {
+        method: editingId ? 'PUT' : 'POST',
+        body: payload,
+      });
+      await loadBills();
+      resetForm();
+      setShowForm(false);
+      setError('');
+    } catch (err) { if (err.status !== 401) setError(err.message); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this bill permanently?')) return;
+    try { await request(`/api/bills/${id}`, { method: 'DELETE' }); await loadBills(); }
+    catch (err) { if (err.status !== 401) setError(err.message); }
+  };
+
+  const sendWhatsApp = (bill) => {
+    const msg = `Hello ${bill.name},\n\nYour Bill Details:\n📋 Bill No: ${bill.billNo}\n📦 Item: ${bill.item}\n💰 Total Amount: ₹${bill.amount}\n✅ Advance Payment: ₹${bill.down}\n⏳ Pending Amount: ₹${bill.pending}\n📍 Order Track: ${bill.orderTrack}\n\nThank you.`;
+    window.open(`https://wa.me/${bill.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  const bgClass    = theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-black';
+  const cardClass  = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200';
+  const inputClass = `px-3 py-2 border rounded outline-none ${
+    theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+  }`;
+
+  return (
+    <div className={`min-h-screen ${bgClass}`}>
+      {/* HEADER */}
+      <div className={`border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">Welcome, {user.name}</h1>
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                {isAdmin ? 'Admin Dashboard — You can see all employees\' bills' : 'Manage your bills'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className={`w-56 ${cardClass} border rounded-lg px-3 py-2 flex items-center gap-2`}>
+                <span className="text-gray-500">🔍</span>
+                <input type="text" placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className={`w-full outline-none ${theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}`} />
+              </div>
+
+              <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                className={`p-2 rounded-lg ${cardClass} border`}>
+                {theme === 'light' ? '🌙' : '☀️'}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <div className={`w-10 h-10 rounded-full ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'} flex items-center justify-center`}>
+                  {isAdmin ? '🛡️' : '👤'}
+                </div>
+                <div className="hidden sm:block leading-tight">
+                  <p className="text-sm font-semibold">{user.user_id}</p>
+                  <p className={`text-xs font-bold ${isAdmin ? 'text-purple-500' : 'text-blue-500'}`}>
+                    {user.role.toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              <button onClick={onLogout}
+                className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700">
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>
+        )}
+
+        <div className="mb-6 flex flex-wrap gap-3">
+          <button onClick={() => { resetForm(); setShowForm(!showForm); }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            {showForm ? '✕ Cancel' : '+ Add New Bill'}
+          </button>
+
+          {isAdmin && (
+            <button onClick={() => setShowUsers(!showUsers)}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium">
+              {showUsers ? '✕ Close Users' : '👥 Manage Users'}
+            </button>
+          )}
+        </div>
+
+        {isAdmin && showUsers && (
+          <UserManager request={request} currentUserId={user.user_id}
+            theme={theme} cardClass={cardClass} />
+        )}
+
+        {showForm && (
+          <div className={`${cardClass} border rounded-lg p-6 mb-6`}>
+            <h2 className="text-lg font-bold mb-4">{editingId ? 'Edit Bill' : 'Add New Bill'}</h2>
+            <form onSubmit={handleSave} className="grid grid-cols-2 gap-4">
+              <input type="text" placeholder="Name" required value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputClass} />
+              <input type="text" placeholder="Phone (with country code)" required value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className={inputClass} />
+              <input type="text" placeholder="Bill No" value={formData.billNo}
+                onChange={(e) => setFormData({ ...formData, billNo: e.target.value })} className={inputClass} />
+              <input type="text" placeholder="Order Track" value={formData.orderTrack}
+                onChange={(e) => setFormData({ ...formData, orderTrack: e.target.value })} className={inputClass} />
+              <input type="text" placeholder="Item" value={formData.item}
+                onChange={(e) => setFormData({ ...formData, item: e.target.value })} className={inputClass} />
+              <input type="number" placeholder="Amount" value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className={inputClass} />
+              <input type="number" placeholder="Advance Payment" value={formData.down}
+                onChange={(e) => setFormData({ ...formData, down: e.target.value })} className={inputClass} />
+              <button type="submit"
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium col-span-2">
+                {editingId ? 'Update Bill' : 'Save Bill'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* BILLS TABLE */}
+        <div className={`${cardClass} border rounded-lg overflow-hidden`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className={theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}>
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold">Phone</th>
+                  <th className="px-4 py-3 text-left font-semibold">Bill No</th>
+                  <th className="px-4 py-3 text-left font-semibold">Order Track</th>
+                  <th className="px-4 py-3 text-left font-semibold">Item</th>
+                  <th className="px-4 py-3 text-left font-semibold">Amount</th>
+                  <th className="px-4 py-3 text-left font-semibold">Advance</th>
+                  <th className="px-4 py-3 text-left font-semibold">Pending</th>
+                  {isAdmin && <th className="px-4 py-3 text-left font-semibold">Created By</th>}
+                  <th className="px-4 py-3 text-left font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                {filteredBills.length > 0 ? filteredBills.map((bill) => (
+                  <tr key={bill.id} className={theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}>
+                    <td className="px-4 py-3">{bill.name}</td>
+                    <td className="px-4 py-3">{bill.phone}</td>
+                    <td className="px-4 py-3 font-semibold">{bill.billNo}</td>
+                    <td className="px-4 py-3">{bill.orderTrack}</td>
+                    <td className="px-4 py-3">{bill.item}</td>
+                    <td className="px-4 py-3 font-semibold">₹{bill.amount}</td>
+                    <td className="px-4 py-3 text-green-600">₹{bill.down}</td>
+                    <td className="px-4 py-3 text-red-600">₹{bill.pending}</td>
+                    {isAdmin && <td className="px-4 py-3 text-xs font-mono opacity-70">{bill.created_by || '—'}</td>}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        <button onClick={() => handleEdit(bill)}
+                          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">Edit</button>
+                        <button onClick={() => sendWhatsApp(bill)}
+                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs">💬 WhatsApp</button>
+                        {isAdmin && (
+                          <button onClick={() => handleDelete(bill.id)}
+                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs">Delete</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={isAdmin ? 10 : 9} className="px-6 py-8 text-center text-gray-500">
+                    No bills found.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* STATS */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className={`${cardClass} border rounded-lg p-4 text-center`}>
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Bills</p>
+            <p className="text-2xl font-bold mt-2">{filteredBills.length}</p>
+          </div>
+          <div className={`${cardClass} border rounded-lg p-4 text-center`}>
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Amount</p>
+            <p className="text-2xl font-bold mt-2">₹{filteredBills.reduce((s, b) => s + b.amount, 0)}</p>
+          </div>
+          <div className={`${cardClass} border rounded-lg p-4 text-center`}>
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Pending</p>
+            <p className="text-2xl font-bold text-red-600 mt-2">₹{filteredBills.reduce((s, b) => s + b.pending, 0)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   APP — GATE (login → dashboard)
+   ============================================================ */
+function App() {
+  const [session, setSession]   = useState(() => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const user  = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+      return token && user ? { token, user } : null;
+    } catch { return null; }
+  });
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    if (!session) { setChecking(false); return; }
+    api('/api/me', { token: session.token })
+      .then((user) => setSession({ token: session.token, user }))
+      .catch(() => {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        setSession(null);
+      })
+      .finally(() => setChecking(false));
+  }, []);
+
+  const handleLogin = (data) => {
+    const next = {
+      token: data.token,
+      user: { user_id: data.user_id, role: data.role, name: data.name },
+    };
+    localStorage.setItem(TOKEN_KEY, next.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(next.user));
+    setSession(next);
+  };
+
+  const handleLogout = async () => {
+    try { await api('/api/logout', { method: 'POST', token: session?.token }); } catch {}
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    setSession(null);
+  };
+
+  if (checking) return (
+    <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>
+  );
+
+  if (!session) return <LoginScreen onLogin={handleLogin} />;
+  return <BillingDashboard session={session} onLogout={handleLogout} />;
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
