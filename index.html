@@ -136,7 +136,7 @@ function LoginScreen({ onLogin }) {
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">User ID (Letters only)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">User ID </label>
             <input type="text" value={userId} required
               onChange={(e) => setUserId(e.target.value.replace(/[^a-zA-Z]/g, ''))}
               autoComplete="username" placeholder="e.g. username"
