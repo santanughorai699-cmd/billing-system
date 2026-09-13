@@ -11,6 +11,7 @@ import sqlite3
 import re
 from datetime import datetime
 import os
+from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 
 # Cloud Database support (PostgreSQL)
 try:
@@ -41,7 +42,14 @@ def get_db():
     if DATABASE_URL and DATABASE_URL.startswith("postgres"):
         if not psycopg2:
             raise Exception("psycopg2-binary is not installed! Add it to requirements.txt")
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=DictCursor)
+        
+        parsed = urlparse(DATABASE_URL)
+        qs = parse_qs(parsed.query, keep_blank_values=True)
+        qs.pop('channel_binding', None)
+        new_query = urlencode(qs, doseq=True)
+        clean_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+        
+        conn = psycopg2.connect(clean_url, cursor_factory=DictCursor)
         return conn, "postgres"
     else:
         conn = sqlite3.connect("billing_system.db")
@@ -188,7 +196,7 @@ class RoleUpdate(BaseModel):
 def current_user(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.split(" ", 1)[1].strip()
+    token = authorization.split(" ", 1).strip()
     
     conn, db_type = get_db()
     c = conn.cursor()
@@ -234,14 +242,14 @@ def login(data: LoginData):
     return {
         "token": token,
         "user_id": data.user_id,
-        "role": row[1],
-        "name": row[2],
+        "role": row,
+        "name": row,
     }
 
 @app.post("/api/logout")
 def logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1].strip()
+        token = authorization.split(" ", 1).strip()
         conn, db_type = get_db()
         c = conn.cursor()
         execute(c, db_type, "DELETE FROM sessions WHERE token = ?", (token,))
@@ -260,7 +268,7 @@ def me(user_id: str = Depends(current_user)):
     if not row:
         raise HTTPException(status_code=401, detail="User not found")
     
-    return {"user_id": user_id, "role": row[0], "name": row[1]}
+    return {"user_id": user_id, "role": row[0], "name": row}
 
 @app.get("/api/bills")
 def get_bills(user_id: str = Depends(current_user)):
