@@ -2,12 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Kalyani Embroidery Bill System</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  /* Safe area padding and responsive adjustment for all devices, mobiles, and notches */
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .responsive-safe-header {
+    padding-top: max(16px, env(safe-area-inset-top, 16px));
+  }
+</style>
 </head>
 <body class="bg-white">
 <div id="root"></div>
@@ -122,7 +131,7 @@ function LoginScreen({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 flex-col responsive-safe-header">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">🧾</div>
@@ -491,8 +500,8 @@ function BillingDashboard({ session, onLogout }) {
 
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300`}>
-      {/* HEADER WITH PROFILE SECTION & LOGOUT */}
-      <div className={`border-b shadow-sm ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+      {/* HEADER WITH PROFILE SECTION & LOGOUT - ADJUSTED WITH SAFE AREA PADDING */}
+      <div className={`border-b shadow-sm responsive-safe-header ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             
