@@ -41,8 +41,18 @@ def get_db():
     if DATABASE_URL and DATABASE_URL.startswith("postgres"):
         if not psycopg2:
             raise Exception("psycopg2-binary is not installed! Add it to requirements.txt")
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=DictCursor)
-        return conn, "postgres"
+        
+        try:
+            # Try direct connection first - Render should handle the URL correctly
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=DictCursor)
+            return conn, "postgres"
+        except psycopg2.OperationalError as e:
+            # If channel_binding parameter causes issues, strip it from URL
+            if "channel_binding" in str(e):
+                clean_url = DATABASE_URL.replace("?channel_binding=disable", "")
+                conn = psycopg2.connect(clean_url, cursor_factory=DictCursor)
+                return conn, "postgres"
+            raise
     else:
         conn = sqlite3.connect("billing_system.db")
         conn.row_factory = sqlite3.Row
@@ -188,7 +198,7 @@ class RoleUpdate(BaseModel):
 def current_user(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.split(" ", 1)[1].strip()
+    token = authorization.split(" ", 1).strip()
     
     conn, db_type = get_db()
     c = conn.cursor()
@@ -241,7 +251,7 @@ def login(data: LoginData):
 @app.post("/api/logout")
 def logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1].strip()
+        token = authorization.split(" ", 1).strip()
         conn, db_type = get_db()
         c = conn.cursor()
         execute(c, db_type, "DELETE FROM sessions WHERE token = ?", (token,))
