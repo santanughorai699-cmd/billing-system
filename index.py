@@ -42,8 +42,7 @@ def get_db():
         if not psycopg2:
             raise Exception("psycopg2-binary is not installed! Add it to requirements.txt")
         
-        # Completely strip query parameters (like ?sslmode=require&channel_binding=disable) 
-        # to prevent psycopg2 DSN parsing errors entirely.
+        # Completely strip query parameters to prevent psycopg2 DSN parsing errors entirely.
         clean_url = DATABASE_URL.split("?")[0]
         
         conn = psycopg2.connect(clean_url, cursor_factory=DictCursor)
@@ -193,7 +192,8 @@ class RoleUpdate(BaseModel):
 def current_user(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.split(" ", 1).strip()
+    # FIXED: Added [1] before .strip()
+    token = authorization.split(" ", 1)[1].strip()
     
     conn, db_type = get_db()
     c = conn.cursor()
@@ -246,7 +246,8 @@ def login(data: LoginData):
 @app.post("/api/logout")
 def logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1).strip()
+        # FIXED: Added [1] before .strip()
+        token = authorization.split(" ", 1)[1].strip()
         conn, db_type = get_db()
         c = conn.cursor()
         execute(c, db_type, "DELETE FROM sessions WHERE token = ?", (token,))
