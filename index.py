@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from pathlib import Path
 from typing import Optional
 import hashlib
@@ -10,6 +10,16 @@ import uvicorn
 import sqlite3
 import re
 from datetime import datetime
+import os
+
+# Cloud Database support (PostgreSQL)
+try:
+    import psycopg2
+    from psycopg2.extras import DictCursor
+except ImportError:
+    psycopg2 = None
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 app = FastAPI()
 
@@ -20,28 +30,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 def hash_pw(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
 # ---------------------------------------------------------
-# DATABASE SETUP
+# DYNAMIC DATABASE SETUP (SQLite for Local, Postgres for Render)
 # ---------------------------------------------------------
-DB_PATH = "billing_system.db"
+def get_db():
+    if DATABASE_URL and DATABASE_URL.startswith("postgres"):
+        if not psycopg2:
+            raise Exception("psycopg2-binary is not installed! Add it to requirements.txt")
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=DictCursor)
+        return conn, "postgres"
+    else:
+        conn = sqlite3.connect("billing_system.db")
+        conn.row_factory = sqlite3.Row
+        return conn, "sqlite"
+
+def execute(c, db_type, query, params=()):
+    if db_type == "postgres":
+        query = query.replace("?", "%s")
+        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+    c.execute(query, params)
 
 def init_db():
-    """Initialize database with tables"""
-    conn = sqlite3.connect(DB_PATH)
+    conn, db_type = get_db()
     c = conn.cursor()
     
-    # Users table
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
+    execute(c, db_type, '''CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY,
         password TEXT NOT NULL,
         name TEXT NOT NULL,
         role TEXT NOT NULL
     )''')
     
-    # Bills table
-    c.execute('''CREATE TABLE IF NOT EXISTS bills (
+    execute(c, db_type, '''CREATE TABLE IF NOT EXISTS bills (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         phone TEXT NOT NULL,
@@ -52,22 +76,18 @@ def init_db():
         down REAL NOT NULL,
         pending REAL NOT NULL,
         created_by TEXT NOT NULL,
-        created_at TEXT,
-        FOREIGN KEY (created_by) REFERENCES users(user_id)
+        created_at TEXT
     )''')
     
-    # Sessions table
-    c.execute('''CREATE TABLE IF NOT EXISTS sessions (
+    execute(c, db_type, '''CREATE TABLE IF NOT EXISTS sessions (
         token TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        created_at TEXT,
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        created_at TEXT
     )''')
     
     conn.commit()
     
-    # Insert default users if not exist
-    c.execute("SELECT COUNT(*) FROM users")
+    execute(c, db_type, "SELECT COUNT(*) FROM users")
     if c.fetchone()[0] == 0:
         default_users = {
             "Samaresh": {"password": hash_pw("s1"), "role": "admin", "name": "Samaresh"},
@@ -75,7 +95,7 @@ def init_db():
             "Susama": {"password": hash_pw("s3"), "role": "employee", "name": "Susama"},
         }
         for user_id, data in default_users.items():
-            c.execute("INSERT INTO users VALUES (?, ?, ?, ?)", 
+            execute(c, db_type, "INSERT INTO users (user_id, password, name, role) VALUES (?, ?, ?, ?)", 
                      (user_id, data["password"], data["name"], data["role"]))
         conn.commit()
     
@@ -84,33 +104,18 @@ def init_db():
 init_db()
 
 # ---------------------------------------------------------
-# HELPERS
-# ---------------------------------------------------------
-def hash_pw(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# ---------------------------------------------------------
 # VALIDATION HELPERS
 # ---------------------------------------------------------
 def is_valid_name(name: str) -> bool:
-    """Only alphabets and spaces allowed"""
     return bool(re.match(r"^[a-zA-Z\s]+$", name.strip())) and len(name.strip()) > 0
 
 def is_valid_user_id(user_id: str) -> bool:
-    """Only alphabets allowed"""
     return bool(re.match(r"^[a-zA-Z]+$", user_id.strip())) and len(user_id.strip()) > 0
 
 def is_valid_phone(phone: str) -> bool:
-    """Only 10 digits for India"""
     return bool(re.match(r"^[0-9]{10}$", phone.strip()))
 
 def format_phone_with_country_code(phone: str) -> str:
-    """Add +91 country code for India"""
     clean_phone = re.sub(r"[^0-9]", "", phone)[-10:]
     return f"91{clean_phone}"
 
@@ -121,7 +126,8 @@ class LoginData(BaseModel):
     user_id: str
     password: str
     
-    @validator('user_id')
+    @field_validator('user_id')
+    @classmethod
     def validate_user_id(cls, v):
         if not is_valid_user_id(v):
             raise ValueError('User ID must contain only alphabets')
@@ -136,13 +142,15 @@ class BillInput(BaseModel):
     amount: float
     down: float
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if not is_valid_name(v):
             raise ValueError('Name must contain only alphabets and spaces')
         return v.strip()
     
-    @validator('phone')
+    @field_validator('phone')
+    @classmethod
     def validate_phone(cls, v):
         if not is_valid_phone(v):
             raise ValueError('Phone must be 10 digits (India only)')
@@ -154,13 +162,15 @@ class UserCreate(BaseModel):
     name: str = ""
     role: str = "employee"
     
-    @validator('user_id')
+    @field_validator('user_id')
+    @classmethod
     def validate_user_id(cls, v):
         if not is_valid_user_id(v):
             raise ValueError('User ID must contain only alphabets')
         return v
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if v and not is_valid_name(v):
             raise ValueError('Name must contain only alphabets and spaces')
@@ -180,9 +190,9 @@ def current_user(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.split(" ", 1)[1].strip()
     
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
-    c.execute("SELECT user_id FROM sessions WHERE token = ?", (token,))
+    execute(c, db_type, "SELECT user_id FROM sessions WHERE token = ?", (token,))
     row = c.fetchone()
     conn.close()
     
@@ -191,9 +201,9 @@ def current_user(authorization: Optional[str] = Header(None)):
     return row[0]
 
 def require_admin(user_id: str = Depends(current_user)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
-    c.execute("SELECT role FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "SELECT role FROM users WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     conn.close()
     
@@ -202,23 +212,21 @@ def require_admin(user_id: str = Depends(current_user)):
     return user_id
 
 # ---------------------------------------------------------
-# AUTH ENDPOINTS
+# ENDPOINTS
 # ---------------------------------------------------------
 @app.post("/api/login")
 def login(data: LoginData):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
-    c.execute("SELECT password, role, name FROM users WHERE user_id = ?", (data.user_id,))
+    execute(c, db_type, "SELECT password, role, name FROM users WHERE user_id = ?", (data.user_id,))
     row = c.fetchone()
-    conn.close()
     
     if not row or row[0] != hash_pw(data.password):
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid user ID or password")
     
     token = secrets.token_hex(24)
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)",
+    execute(c, db_type, "INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)",
              (token, data.user_id, datetime.now().isoformat()))
     conn.commit()
     conn.close()
@@ -234,18 +242,18 @@ def login(data: LoginData):
 def logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ", 1)[1].strip()
-        conn = sqlite3.connect(DB_PATH)
+        conn, db_type = get_db()
         c = conn.cursor()
-        c.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        execute(c, db_type, "DELETE FROM sessions WHERE token = ?", (token,))
         conn.commit()
         conn.close()
     return {"message": "Logged out"}
 
 @app.get("/api/me")
 def me(user_id: str = Depends(current_user)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
-    c.execute("SELECT role, name FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "SELECT role, name FROM users WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     conn.close()
     
@@ -254,34 +262,36 @@ def me(user_id: str = Depends(current_user)):
     
     return {"user_id": user_id, "role": row[0], "name": row[1]}
 
-# ---------------------------------------------------------
-# BILLS (Everyone can view and edit all bills)
-# ---------------------------------------------------------
 @app.get("/api/bills")
 def get_bills(user_id: str = Depends(current_user)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
-    # Everyone sees all bills now
-    c.execute("SELECT id, name, phone, billNo, orderTrack, item, amount, down, pending, created_by FROM bills ORDER BY id DESC")
+    execute(c, db_type, "SELECT id, name, phone, billNo, orderTrack, item, amount, down, pending, created_by FROM bills ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
-    
     return [dict(row) for row in rows]
 
 @app.post("/api/bills")
 def create_bill(bill: BillInput, user_id: str = Depends(current_user)):
     pending = max(bill.amount - bill.down, 0)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn, db_type = get_db()
     c = conn.cursor()
-    c.execute("""INSERT INTO bills (name, phone, billNo, orderTrack, item, amount, down, pending, created_by, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-             (bill.name, bill.phone, bill.billNo, bill.orderTrack, bill.item, 
-              bill.amount, bill.down, pending, user_id, datetime.now().isoformat()))
-    conn.commit()
     
-    c.execute("SELECT last_insert_rowid()")
-    bill_id = c.fetchone()[0]
+    query = """INSERT INTO bills (name, phone, billNo, orderTrack, item, amount, down, pending, created_by, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+    params = (bill.name, bill.phone, bill.billNo, bill.orderTrack, bill.item, 
+              bill.amount, bill.down, pending, user_id, datetime.now().isoformat())
+              
+    if db_type == "postgres":
+        execute(c, db_type, query + " RETURNING id", params)
+        bill_id = c.fetchone()[0]
+    else:
+        execute(c, db_type, query, params)
+        c.execute("SELECT last_insert_rowid()")
+        bill_id = c.fetchone()[0]
+        
+    conn.commit()
     conn.close()
     
     return {
@@ -299,20 +309,18 @@ def create_bill(bill: BillInput, user_id: str = Depends(current_user)):
 
 @app.put("/api/bills/{bill_id}")
 def update_bill(bill_id: int, bill: BillInput, user_id: str = Depends(current_user)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
     
-    # Check if bill exists
-    c.execute("SELECT created_by FROM bills WHERE id = ?", (bill_id,))
+    execute(c, db_type, "SELECT created_by FROM bills WHERE id = ?", (bill_id,))
     row = c.fetchone()
     
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Bill not found")
     
-    # Anyone (Admin or Employee) can edit any bill now
     pending = max(bill.amount - bill.down, 0)
-    c.execute("""UPDATE bills SET name = ?, phone = ?, billNo = ?, orderTrack = ?, item = ?, amount = ?, down = ?, pending = ?
+    execute(c, db_type, """UPDATE bills SET name = ?, phone = ?, billNo = ?, orderTrack = ?, item = ?, amount = ?, down = ?, pending = ?
                  WHERE id = ?""",
              (bill.name, bill.phone, bill.billNo, bill.orderTrack, bill.item, bill.amount, bill.down, pending, bill_id))
     conn.commit()
@@ -333,38 +341,35 @@ def update_bill(bill_id: int, bill: BillInput, user_id: str = Depends(current_us
 
 @app.delete("/api/bills/{bill_id}")
 def delete_bill(bill_id: int, user_id: str = Depends(current_user)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
     
-    c.execute("SELECT role FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "SELECT role FROM users WHERE user_id = ?", (user_id,))
     if c.fetchone()[0] != "admin":
         conn.close()
         raise HTTPException(status_code=403, detail="Only admin can delete bills")
     
-    c.execute("DELETE FROM bills WHERE id = ?", (bill_id,))
+    execute(c, db_type, "DELETE FROM bills WHERE id = ?", (bill_id,))
     conn.commit()
     conn.close()
     
     return {"message": "Bill deleted"}
 
-# ---------------------------------------------------------
-# USERS (admin only)
-# ---------------------------------------------------------
 @app.get("/api/users")
 def list_users(admin: str = Depends(require_admin)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
-    c.execute("SELECT user_id, name, role FROM users")
+    execute(c, db_type, "SELECT user_id, name, role FROM users")
     rows = c.fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
 @app.post("/api/users")
 def create_user(data: UserCreate, admin: str = Depends(require_admin)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
     
-    c.execute("SELECT user_id FROM users WHERE user_id = ?", (data.user_id,))
+    execute(c, db_type, "SELECT user_id FROM users WHERE user_id = ?", (data.user_id,))
     if c.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="User ID already exists")
@@ -373,7 +378,7 @@ def create_user(data: UserCreate, admin: str = Depends(require_admin)):
         conn.close()
         raise HTTPException(status_code=400, detail="Role must be admin or employee")
     
-    c.execute("INSERT INTO users (user_id, password, name, role) VALUES (?, ?, ?, ?)",
+    execute(c, db_type, "INSERT INTO users (user_id, password, name, role) VALUES (?, ?, ?, ?)",
              (data.user_id, hash_pw(data.password), data.name or data.user_id, data.role))
     conn.commit()
     conn.close()
@@ -382,10 +387,10 @@ def create_user(data: UserCreate, admin: str = Depends(require_admin)):
 
 @app.put("/api/users/{user_id}")
 def update_role(user_id: str, data: RoleUpdate, admin: str = Depends(require_admin)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
     
-    c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if not c.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -394,7 +399,7 @@ def update_role(user_id: str, data: RoleUpdate, admin: str = Depends(require_adm
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid role")
     
-    c.execute("UPDATE users SET role = ? WHERE user_id = ?", (data.role, user_id))
+    execute(c, db_type, "UPDATE users SET role = ? WHERE user_id = ?", (data.role, user_id))
     conn.commit()
     conn.close()
     
@@ -402,15 +407,15 @@ def update_role(user_id: str, data: RoleUpdate, admin: str = Depends(require_adm
 
 @app.put("/api/users/{user_id}/password")
 def reset_password(user_id: str, data: PasswordReset, admin: str = Depends(require_admin)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
     
-    c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if not c.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
     
-    c.execute("UPDATE users SET password = ? WHERE user_id = ?", (hash_pw(data.password), user_id))
+    execute(c, db_type, "UPDATE users SET password = ? WHERE user_id = ?", (hash_pw(data.password), user_id))
     conn.commit()
     conn.close()
     
@@ -418,20 +423,20 @@ def reset_password(user_id: str, data: PasswordReset, admin: str = Depends(requi
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: str, admin: str = Depends(require_admin)):
-    conn = get_db()
+    conn, db_type = get_db()
     c = conn.cursor()
     
     if user_id == admin:
         conn.close()
         raise HTTPException(status_code=400, detail="You cannot delete yourself")
     
-    c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if not c.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
     
-    c.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
-    c.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "DELETE FROM users WHERE user_id = ?", (user_id,))
+    execute(c, db_type, "DELETE FROM sessions WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
     
