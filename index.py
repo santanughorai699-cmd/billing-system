@@ -11,7 +11,6 @@ import sqlite3
 import re
 from datetime import datetime
 import os
-from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 
 # Cloud Database support (PostgreSQL)
 try:
@@ -42,19 +41,23 @@ def get_db():
     if DATABASE_URL and DATABASE_URL.startswith("postgres"):
         if not psycopg2:
             raise Exception("psycopg2-binary is not installed! Add it to requirements.txt")
-        try:
-            conn = psycopg2.connect(DATABASE_URL, cursor_factory=DictCursor)
-            return conn, "postgres"
-        except psycopg2.OperationalError as e:
-            if "channel_binding" in str(e):
-                clean_url = DATABASE_URL.replace("?channel_binding=disable", "")
-                conn = psycopg2.connect(clean_url, cursor_factory=DictCursor)
-                return conn, "postgres"
-            raise
+        
+        # Completely strip query parameters (like ?sslmode=require&channel_binding=disable) 
+        # to prevent psycopg2 DSN parsing errors entirely.
+        clean_url = DATABASE_URL.split("?")[0]
+        
+        conn = psycopg2.connect(clean_url, cursor_factory=DictCursor)
+        return conn, "postgres"
     else:
         conn = sqlite3.connect("billing_system.db")
         conn.row_factory = sqlite3.Row
         return conn, "sqlite"
+
+def execute(c, db_type, query, params=()):
+    if db_type == "postgres":
+        query = query.replace("?", "%s")
+        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+    c.execute(query, params)
 
 def init_db():
     conn, db_type = get_db()
