@@ -646,6 +646,12 @@ function BillingDashboard({ session, onLogout }) {
   const [workEditMode, setWorkEditMode] = useState(false);
   const [workEditEmployee, setWorkEditEmployee] = useState('');
   const [pendingWorkRequests, setPendingWorkRequests] = useState([]);
+  const [workActivity, setWorkActivity] = useState([]);
+  const [workActivityError, setWorkActivityError] = useState('');
+  const [showWorkNotifications, setShowWorkNotifications] = useState(false);
+  const [workActivityLastSeen, setWorkActivityLastSeen] = useState(() =>
+    localStorage.getItem(`bbs_work_activity_seen_${user.user_id}`) || new Date().toISOString()
+  );
   const [showWorkStats, setShowWorkStats] = useState(false);
   const [workStats, setWorkStats] = useState([]);
   const [workStatsError, setWorkStatsError] = useState('');
@@ -762,6 +768,21 @@ function BillingDashboard({ session, onLogout }) {
     }
   }, [request]);
 
+  const loadWorkActivity = useCallback(async () => {
+    try {
+      setWorkActivity(await request('/api/work-activity'));
+      setWorkActivityError('');
+    } catch (err) {
+      if (err.status !== 401) setWorkActivityError(err.message);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    loadWorkActivity();
+    const timer = setInterval(loadWorkActivity, 15000);
+    return () => clearInterval(timer);
+  }, [loadWorkActivity]);
+
   useEffect(() => {
     loadWorkChangeRequests();
     const timer = setInterval(loadWorkChangeRequests, 10000);
@@ -785,6 +806,7 @@ function BillingDashboard({ session, onLogout }) {
       setPendingWorkRequests((currentRequests) =>
         currentRequests.filter((requestItem) => requestItem.bill_id !== changeRequest.bill_id)
       );
+      await loadWorkActivity();
     } catch (err) {
       if (err.status !== 401) setWorkTrackingError(err.message);
     } finally {
@@ -813,6 +835,7 @@ function BillingDashboard({ session, onLogout }) {
         ));
         setMeasurementBill((bill) => bill?.id === measurementBill.id ? { ...bill, ...result } : bill);
         setWorkTrackingNotice('কাজের কর্মী পরিবর্তন সংরক্ষিত হয়েছে।');
+        await loadWorkActivity();
       } else {
         const result = await request(`/api/bills/${measurementBill.id}/work-change-request`, {
           method: 'POST',
@@ -830,6 +853,7 @@ function BillingDashboard({ session, onLogout }) {
         ));
         setMeasurementBill((bill) => bill?.id === measurementBill.id ? { ...bill, ...pendingChange } : bill);
         setWorkTrackingNotice(`বর্তমান কর্মী অথবা Admin-এর অনুমতির জন্য অনুরোধ পাঠানো হয়েছে। নতুন কর্মী: ${target.name}।`);
+        await loadWorkActivity();
       }
       setWorkEditMode(false);
     } catch (err) {
@@ -862,6 +886,7 @@ function BillingDashboard({ session, onLogout }) {
         currentBill.id === bill.id ? { ...currentBill, ...completion } : currentBill
       ));
       setMeasurementBill((currentBill) => currentBill?.id === bill.id ? updatedBill : currentBill);
+      await loadWorkActivity();
     } catch (err) {
       if (err.status !== 401) setWorkTrackingError(err.message);
     } finally {
@@ -1122,6 +1147,35 @@ function BillingDashboard({ session, onLogout }) {
     theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
   }`;
   const activeWorkChangeRequest = pendingWorkRequests[0];
+  const unreadWorkActivityCount = workActivity.filter((activity) =>
+    new Date(activity.created_at).getTime() > new Date(workActivityLastSeen).getTime()
+  ).length;
+  const describeWorkActivity = (activity) => {
+    const billLabel = `${activity.customer_name} · Bill #${activity.bill_no}`;
+    switch (activity.event_type) {
+      case 'work_completed':
+        return `${activity.actor_name} কাজ সম্পন্ন করেছেন — ${billLabel}।`;
+      case 'work_assigned':
+        return `${activity.actor_name} কর্মী পরিবর্তন করেছেন: ${activity.previous_worker_name || '—'} → ${activity.target_worker_name} — ${billLabel}।`;
+      case 'work_change_requested':
+        return `${activity.actor_name} কর্মী পরিবর্তনের অনুরোধ করেছেন: ${activity.previous_worker_name || '—'} → ${activity.target_worker_name} — ${billLabel}।`;
+      case 'work_change_accepted':
+        return `${activity.actor_name} কর্মী পরিবর্তনের অনুরোধ গ্রহণ করেছেন। নতুন কর্মী: ${activity.target_worker_name} — ${billLabel}।`;
+      case 'work_change_rejected':
+        return `${activity.actor_name} কর্মী পরিবর্তনের অনুরোধ বাতিল করেছেন। বর্তমান কর্মী: ${activity.previous_worker_name || '—'} — ${billLabel}।`;
+      default:
+        return `${activity.actor_name} কাজের তথ্য পরিবর্তন করেছেন — ${billLabel}।`;
+    }
+  };
+  const toggleWorkNotifications = () => {
+    const nextOpen = !showWorkNotifications;
+    setShowWorkNotifications(nextOpen);
+    if (nextOpen) {
+      const seenAt = new Date().toISOString();
+      localStorage.setItem(`bbs_work_activity_seen_${user.user_id}`, seenAt);
+      setWorkActivityLastSeen(seenAt);
+    }
+  };
 
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300`}>
@@ -1421,6 +1475,51 @@ function BillingDashboard({ session, onLogout }) {
             </div>
 
             <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-3 w-full md:w-auto">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={toggleWorkNotifications}
+                  aria-expanded={showWorkNotifications}
+                  aria-label={`কাজের notification${unreadWorkActivityCount ? `, ${unreadWorkActivityCount} টি নতুন` : ''}`}
+                  className={`relative p-2 rounded-lg ${cardClass} border text-sm font-semibold hover:opacity-80`}
+                >
+                  🔔 Notification
+                  {unreadWorkActivityCount > 0 && (
+                    <span className="absolute -top-2 -right-2 min-w-5 h-5 rounded-full bg-red-600 px-1 text-xs leading-5 text-white">
+                      {unreadWorkActivityCount > 99 ? '99+' : unreadWorkActivityCount}
+                    </span>
+                  )}
+                </button>
+                {showWorkNotifications && (
+                  <div className={`absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border shadow-xl ${cardClass}`}>
+                    <div className="flex items-center justify-between border-b border-gray-500/20 px-4 py-3">
+                      <h2 className="font-bold">কাজের activity</h2>
+                      <button
+                        type="button"
+                        onClick={() => setShowWorkNotifications(false)}
+                        aria-label="Close notifications"
+                        className="px-2 text-lg opacity-70 hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {workActivityError && <p role="alert" className="px-4 pt-3 text-sm text-red-500">{workActivityError}</p>}
+                    <div className="max-h-96 overflow-y-auto">
+                      {workActivity.length === 0 ? (
+                        <p className="px-4 py-6 text-center text-sm opacity-70">এখনও কোনো কাজের notification নেই।</p>
+                      ) : (
+                        workActivity.map((activity) => (
+                          <div key={activity.id} className="border-b border-gray-500/10 px-4 py-3 last:border-0">
+                            <p className="text-sm">{describeWorkActivity(activity)}</p>
+                            <p className="mt-1 text-xs opacity-60">{new Date(activity.created_at).toLocaleString()}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className={`w-full sm:w-52 ${cardClass} border rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-inner`}>
                 <span className="text-gray-400">🔍</span>
                 <input type="text" placeholder="Search bill..."

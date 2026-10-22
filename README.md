@@ -58,6 +58,7 @@ Back up the database regularly. **Deleting `billing_system.db` permanently remov
 - Create, view, and edit bills; pending balances are calculated from the amount and advance.
 - Bill creation dates are recorded automatically and displayed as `DD-MM-YY`. Enter delivery dates as `DD-MM-YY`; impossible dates and other formats are rejected. Two-digit years are interpreted as 2000-2099.
 - Track who created each bill and which worker completed its garment work. Any user can request a completed-work attribution change; the current worker or an admin must approve it before the requested worker is assigned, while admins can also update it directly. Admins can view completed-job counts grouped by worker and completion day.
+- View recent work completion, reassignment, change requests, approvals, and rejections in the shared notification menu at the top of the dashboard.
 - Set delivery dates and receive a shared dashboard reminder starting three days before delivery; any authenticated user can accept it, reject it for the current session, or schedule it for another date.
 - Expand the garment-measurement section while entering a bill to save measurements (ঝুল, ছাতি, কোমর, পুট, হাতা, মহরী, মহড়া, পে, কছ); enter values such as `14` directly and tap the `1/2` button to add `½`. Open saved measurements from the customer name or the bill's measurement button.
 - All authenticated users can view and edit all bills.

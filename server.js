@@ -356,6 +356,15 @@ async function query(sql, params = [], client = null) {
   return [];
 }
 
+async function recordWorkActivity(eventType, actorName, customerName, billNo, previousWorkerName, targetWorkerName) {
+  await query(
+    `INSERT INTO work_activity
+       (event_type, actor_name, customer_name, bill_no, previous_worker_name, target_worker_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [eventType, actorName, customerName, billNo, previousWorkerName, targetWorkerName, new Date().toISOString()]
+  );
+}
+
 async function withTransaction(work) {
   if (DB_TYPE === "postgres") {
     const client = await pool.connect();
@@ -445,6 +454,17 @@ async function initDatabase() {
     token TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     created_at TEXT
+  )`);
+
+  await query(`CREATE TABLE IF NOT EXISTS work_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    bill_no TEXT NOT NULL,
+    previous_worker_name TEXT,
+    target_worker_name TEXT NOT NULL,
+    created_at TEXT NOT NULL
   )`);
 
   const userPhoneColumn = DB_TYPE === "postgres"
@@ -842,6 +862,8 @@ app.post("/api/bills/:id/work-complete", requireAuth, async (req, res) => {
   const billId = parseId(req.params.id);
   const [user] = await query("SELECT name, role FROM users WHERE user_id = ?", [req.userId]);
   if (!user) throw new HttpError(401, "User not found");
+  const [billDetails] = await query("SELECT name, billNo FROM bills WHERE id = ?", [billId]);
+  if (!billDetails) throw new HttpError(404, "Bill not found");
 
   const completedAt = new Date().toISOString();
   const updated = await query(
@@ -857,6 +879,7 @@ app.post("/api/bills/:id/work-complete", requireAuth, async (req, res) => {
     if (!bill) throw new HttpError(404, "Bill not found");
     throw new HttpError(409, "Work has already been marked complete");
   }
+  await recordWorkActivity("work_completed", user.name, billDetails.name, billDetails.billNo, null, user.name);
   res.json({
     work_completed_by: req.userId,
     work_completed_by_name: user.name,
@@ -872,7 +895,13 @@ app.put("/api/bills/:id/work-complete", requireAuth, requireAdmin, validate(z.ob
   workerId: z.string().min(2).max(32).regex(USER_ID_RE),
 })), async (req, res) => {
   const billId = parseId(req.params.id);
-  const [bill] = await query("SELECT work_completed_at FROM bills WHERE id = ?", [billId]);
+  const [bill] = await query(
+    `SELECT bills.work_completed_at, bills.name, bills.billNo, bills.work_completed_by,
+            previous_worker.name AS previous_worker_name
+     FROM bills LEFT JOIN users AS previous_worker ON previous_worker.user_id = bills.work_completed_by
+     WHERE bills.id = ?`,
+    [billId]
+  );
   if (!bill) throw new HttpError(404, "Bill not found");
   if (!bill.work_completed_at) throw new HttpError(409, "Work must be marked complete before changing its employee");
 
@@ -880,11 +909,15 @@ app.put("/api/bills/:id/work-complete", requireAuth, requireAdmin, validate(z.ob
     req.body.workerId,
   ]);
   if (!employee) throw new HttpError(400, "Select a valid employee or admin");
+  const [actor] = await query("SELECT name FROM users WHERE user_id = ?", [req.userId]);
 
   await query(
     "UPDATE bills SET work_completed_by = ?, work_change_requested_by = NULL, work_change_requested_to = NULL, work_change_requested_at = NULL WHERE id = ?",
     [employee.user_id, billId]
   );
+  if (bill.work_completed_by !== employee.user_id) {
+    await recordWorkActivity("work_assigned", actor.name, bill.name, bill.billNo, bill.previous_worker_name, employee.name);
+  }
   res.json({
     work_completed_by: employee.user_id,
     work_completed_by_name: employee.name,
@@ -918,6 +951,12 @@ app.post("/api/bills/:id/work-change-request", requireAuth, validate(WorkChangeR
 
   const requestedAt = new Date().toISOString();
   const [requester] = await query("SELECT name FROM users WHERE user_id = ?", [req.userId]);
+  const [billDetails] = await query(
+    `SELECT bills.name, bills.billNo, current_worker.name AS current_worker_name
+     FROM bills LEFT JOIN users AS current_worker ON current_worker.user_id = bills.work_completed_by
+     WHERE bills.id = ?`,
+    [billId]
+  );
   const updated = await query(
     `UPDATE bills SET work_change_requested_by = ?, work_change_requested_to = ?, work_change_requested_at = ?
      WHERE id = ? AND work_completed_by IS NOT NULL AND work_completed_by != ?
@@ -933,6 +972,14 @@ app.post("/api/bills/:id/work-change-request", requireAuth, validate(WorkChangeR
     throw new HttpError(409, "Another work change request is already pending");
   }
 
+  await recordWorkActivity(
+    "work_change_requested",
+    requester.name,
+    billDetails.name,
+    billDetails.billNo,
+    billDetails.current_worker_name,
+    target.name
+  );
   res.json({
     message: "Work change request sent",
     work_change_requested_by: req.userId,
@@ -966,7 +1013,8 @@ app.post("/api/bills/:id/work-change-response", requireAuth, validate(WorkChange
   const [bill] = await query(
     `SELECT bills.work_change_requested_by, bills.work_change_requested_to, bills.work_change_requested_at,
             bills.work_completed_by, bills.work_completed_at, target.name AS target_name, target.role AS target_role,
-            current_worker.name AS current_worker_name, current_worker.role AS current_worker_role
+            current_worker.name AS current_worker_name, current_worker.role AS current_worker_role,
+            bills.name, bills.billNo
      FROM bills
      LEFT JOIN users AS target ON target.user_id = bills.work_change_requested_to
      LEFT JOIN users AS current_worker ON current_worker.user_id = bills.work_completed_by
@@ -983,6 +1031,7 @@ app.post("/api/bills/:id/work-change-response", requireAuth, validate(WorkChange
   }
 
   if (req.body.accept && !bill.target_name) throw new HttpError(409, "The assigned user no longer exists");
+  const [actor] = await query("SELECT name FROM users WHERE user_id = ?", [req.userId]);
   const changed = req.body.accept
     ? await query(
         `UPDATE bills SET work_completed_by = ?, work_change_requested_by = NULL, work_change_requested_to = NULL, work_change_requested_at = NULL
@@ -995,6 +1044,14 @@ app.post("/api/bills/:id/work-change-response", requireAuth, validate(WorkChange
         [billId, bill.work_completed_by, bill.work_change_requested_by, bill.work_change_requested_to]
       );
   if (changed.length === 0) throw new HttpError(409, "Work change request is no longer pending");
+  await recordWorkActivity(
+      req.body.accept ? "work_change_accepted" : "work_change_rejected",
+      actor.name,
+      bill.name,
+      bill.billNo,
+      bill.current_worker_name,
+      bill.target_name
+  );
 
   res.json({
     bill_id: billId,
@@ -1007,6 +1064,15 @@ app.post("/api/bills/:id/work-change-response", requireAuth, validate(WorkChange
     work_change_requested_to: null,
     work_change_requested_at: null,
   });
+});
+
+app.get("/api/work-activity", requireAuth, async (_req, res) => {
+  const rows = await query(
+    `SELECT id, event_type, actor_name, customer_name, bill_no, previous_worker_name,
+            target_worker_name, created_at
+     FROM work_activity ORDER BY id DESC LIMIT 50`
+  );
+  res.json(rows);
 });
 
 app.get("/api/work-stats", requireAuth, requireAdmin, async (req, res) => {

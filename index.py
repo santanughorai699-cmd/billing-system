@@ -348,6 +348,21 @@ def execute(c, db_type: str, query: str, params: tuple = ()):
     c.execute(query, params)
 
 
+def record_work_activity(
+    c, db_type, event_type, actor_name, customer_name, bill_no, previous_worker_name, target_worker_name
+):
+    execute(
+        c, db_type,
+        """INSERT INTO work_activity
+           (event_type, actor_name, customer_name, bill_no, previous_worker_name, target_worker_name, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            event_type, actor_name, customer_name, bill_no, previous_worker_name,
+            target_worker_name, datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+
+
 def init_db():
     with db_session() as (conn, c, db_type):
         execute(c, db_type, '''CREATE TABLE IF NOT EXISTS users (
@@ -375,6 +390,17 @@ def init_db():
             token TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             created_at TEXT
+        )''')
+
+        execute(c, db_type, '''CREATE TABLE IF NOT EXISTS work_activity (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            actor_name TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            bill_no TEXT NOT NULL,
+            previous_worker_name TEXT,
+            target_worker_name TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )''')
 
         if db_type == "postgres":
@@ -833,6 +859,10 @@ def mark_work_complete(bill_id: int, user_id: str = Depends(current_user)):
         user = c.fetchone()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        execute(c, db_type, "SELECT name, billNo FROM bills WHERE id = ?", (bill_id,))
+        bill = c.fetchone()
+        if not bill:
+            raise HTTPException(status_code=404, detail="Bill not found")
 
         completed_at = datetime.now(timezone.utc).isoformat()
         execute(
@@ -845,6 +875,7 @@ def mark_work_complete(bill_id: int, user_id: str = Depends(current_user)):
             if not c.fetchone():
                 raise HTTPException(status_code=404, detail="Bill not found")
             raise HTTPException(status_code=409, detail="Work has already been marked complete")
+        record_work_activity(c, db_type, "work_completed", user[0], bill[0], bill[1], None, user[0])
         conn.commit()
 
     return {
@@ -861,7 +892,14 @@ def mark_work_complete(bill_id: int, user_id: str = Depends(current_user)):
 @app.put("/api/bills/{bill_id}/work-complete")
 def update_work_completion(bill_id: int, assignment: WorkCompletionAssignment, admin: str = Depends(require_admin)):
     with db_session() as (conn, c, db_type):
-        execute(c, db_type, "SELECT work_completed_at FROM bills WHERE id = ?", (bill_id,))
+        execute(
+            c, db_type,
+            """SELECT bills.work_completed_at, bills.name, bills.billNo, bills.work_completed_by,
+                      previous_worker.name
+               FROM bills LEFT JOIN users AS previous_worker ON previous_worker.user_id = bills.work_completed_by
+               WHERE bills.id = ?""",
+            (bill_id,),
+        )
         bill = c.fetchone()
         if not bill:
             raise HTTPException(status_code=404, detail="Bill not found")
@@ -873,11 +911,15 @@ def update_work_completion(bill_id: int, assignment: WorkCompletionAssignment, a
         if not worker:
             raise HTTPException(status_code=400, detail="Select a valid employee or admin")
 
+        execute(c, db_type, "SELECT name FROM users WHERE user_id = ?", (admin,))
+        actor = c.fetchone()
         execute(
             c, db_type,
             "UPDATE bills SET work_completed_by = ?, work_change_requested_by = NULL, work_change_requested_to = NULL, work_change_requested_at = NULL WHERE id = ?",
             (worker[0], bill_id),
         )
+        if bill[3] != worker[0]:
+            record_work_activity(c, db_type, "work_assigned", actor[0], bill[1], bill[2], bill[4], worker[1])
         conn.commit()
 
     return {
@@ -907,6 +949,14 @@ def request_work_change(bill_id: int, assignment: WorkCompletionAssignment, user
             raise HTTPException(status_code=400, detail="Select a valid employee or admin")
         execute(c, db_type, "SELECT name FROM users WHERE user_id = ?", (user_id,))
         requester = c.fetchone()
+        execute(
+            c, db_type,
+            """SELECT bills.name, bills.billNo, current_worker.name
+               FROM bills LEFT JOIN users AS current_worker ON current_worker.user_id = bills.work_completed_by
+               WHERE bills.id = ?""",
+            (bill_id,),
+        )
+        bill_details = c.fetchone()
 
         requested_at = datetime.now(timezone.utc).isoformat()
         execute(
@@ -926,6 +976,10 @@ def request_work_change(bill_id: int, assignment: WorkCompletionAssignment, user
             if bill[0] == target[0]:
                 raise HTTPException(status_code=400, detail="This worker is already assigned")
             raise HTTPException(status_code=409, detail="Another work change request is already pending")
+        record_work_activity(
+            c, db_type, "work_change_requested", requester[0], bill_details[0], bill_details[1],
+            bill_details[2], target[1],
+        )
         conn.commit()
 
     return {
@@ -968,7 +1022,7 @@ def respond_to_work_change(bill_id: int, response: WorkChangeResponse, user_id: 
             c, db_type,
             """SELECT bills.work_change_requested_by, bills.work_change_requested_to,
                       bills.work_completed_by, bills.work_completed_at, target.name, target.role,
-                      current_worker.name, current_worker.role
+                      current_worker.name, current_worker.role, bills.name, bills.billNo
                FROM bills
                LEFT JOIN users AS current_worker ON current_worker.user_id = bills.work_completed_by
                LEFT JOIN users AS target ON target.user_id = bills.work_change_requested_to
@@ -987,6 +1041,8 @@ def respond_to_work_change(bill_id: int, response: WorkChangeResponse, user_id: 
                 raise HTTPException(status_code=403, detail="Only the current worker or an admin can respond to this request")
         if response.accept and not bill[4]:
             raise HTTPException(status_code=409, detail="The assigned user no longer exists")
+        execute(c, db_type, "SELECT name FROM users WHERE user_id = ?", (user_id,))
+        actor = c.fetchone()
 
         if response.accept:
             execute(
@@ -1006,6 +1062,10 @@ def respond_to_work_change(bill_id: int, response: WorkChangeResponse, user_id: 
             )
         if c.rowcount == 0:
             raise HTTPException(status_code=409, detail="Work change request is no longer pending")
+        record_work_activity(
+            c, db_type, "work_change_accepted" if response.accept else "work_change_rejected",
+            actor[0], bill[8], bill[9], bill[6], bill[4],
+        )
         conn.commit()
 
     return {
@@ -1019,6 +1079,18 @@ def respond_to_work_change(bill_id: int, response: WorkChangeResponse, user_id: 
         "work_change_requested_to": None,
         "work_change_requested_at": None,
     }
+
+
+@app.get("/api/work-activity")
+def get_work_activity(user_id: str = Depends(current_user)):
+    with db_session() as (conn, c, db_type):
+        execute(
+            c, db_type,
+            """SELECT id, event_type, actor_name, customer_name, bill_no, previous_worker_name,
+                      target_worker_name, created_at
+               FROM work_activity ORDER BY id DESC LIMIT 50""",
+        )
+        return [dict(row) for row in c.fetchall()]
 
 
 @app.get("/api/work-stats")
