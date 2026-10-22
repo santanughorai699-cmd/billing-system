@@ -580,7 +580,7 @@ class WorkCompletionAssignment(BaseModel):
     def validate_worker_id(cls, value):
         if not is_valid_user_id(value):
             raise ValueError("Worker ID must contain only alphabets")
-        return value.strip().lower()
+        return value.strip()
 
 
 class WorkChangeResponse(BaseModel):
