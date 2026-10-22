@@ -118,18 +118,18 @@ pip install -r requirements.txt
 ### ❌ "Address already in use"
 **Solution:** Server already running on port 8000
 ```bash
-# Windows - Kill the process
+
 netstat -ano | findstr :8000
 taskkill /PID <PID> /F
 
-# Mac/Linux - Kill the process
+
 lsof -ti:8000 | xargs kill -9
 ```
 
 ### ❌ "ModuleNotFoundError"
 **Solution:** Install in correct directory
 ```bash
-# Make sure you're in the project folder
+
 cd /path/to/project
 pip install -r requirements.txt
 ```
@@ -174,10 +174,10 @@ deactivate
 If you need to create `requirements.txt` again:
 
 ```bash
-# Install packages manually
+
 pip install fastapi uvicorn pydantic
 
-# Create requirements.txt with exact versions
+
 pip freeze > requirements.txt
 ```
 
@@ -186,19 +186,19 @@ pip freeze > requirements.txt
 ## 🎯 Quick Commands Cheat Sheet
 
 ```bash
-# Install all dependencies
+
 pip install -r requirements.txt
 
-# Check installed packages
+
 pip list
 
-# Run the server
+
 python index.py
 
-# Access in browser
+
 http://localhost:8000
 
-# Stop server
+
 Ctrl + C
 ```
 
@@ -249,10 +249,10 @@ pip freeze > requirements.txt
 
 ## 🚀 Production Deployment
 
-For production servers, create a `requirements-prod.txt`:
+ `requirements-prod.txt`:
 
 ```bash
-# Add production-specific packages
+
 pip install gunicorn
 echo "gunicorn==21.2.0" >> requirements-prod.txt
 ```

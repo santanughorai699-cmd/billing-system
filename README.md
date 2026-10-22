@@ -1,276 +1,100 @@
-# Kalyani Embroidery Bill Management System - Updated
+# Kalyani Embroidery Bill Management System
 
-## ✨ Updates Made
+A bill-management web app with a React-based frontend, an Express backend (`server.js`), and an alternate FastAPI backend (`index.py`). Both backends serve `index.html` and use SQLite by default; they can use PostgreSQL when `DATABASE_URL` is configured.
 
-### 1. **Name Validation** ✓
-- Only **letters and spaces** allowed
-- No numbers or special characters
-- Real-time validation on input
+## Requirements
 
-### 2. **User ID Validation** ✓
-- Only **letters** allowed
-- No numbers or special characters
-- Example: `Samaresh`, `Bimal`, `Susama`
+- Node.js 18 or newer and npm to run the Express backend
+- Python 3.8 or newer to run the FastAPI backend
 
-### 3. **Phone Number Validation** ✓
-- **India only** (+91 country code)
-- Only **10 digits** accepted
-- Numbers only (no dashes, spaces, or symbols)
-- Automatically adds +91 prefix to saved data
+## Run with Node.js (recommended)
 
-### 4. **Database Persistence** ✓
-- All bills are **saved to SQLite database** (`billing_system.db`)
-- Data persists even after server restart
-- No data loss when server stops
+From the project directory, install dependencies and start the server:
 
-### 5. **Smart Bill Management** ✓
-- Bills are automatically saved when created or updated
-- No manual save required
-- Only admin can delete bills
-- All operations are persistent
-
----
-
-## 🚀 Installation & Setup
-
-### Step 1: Install Dependencies
-```bash
-pip install fastapi uvicorn pydantic
+```powershell
+npm install
+npm start
 ```
 
-### Step 2: Replace Files
-- Replace old `index.py` with the new **updated `index.py`**
-- Replace old `index.html` with the new **`index_updated.html`**
-- Rename `index_updated.html` to `index.html`
+Open [http://localhost:8000](http://localhost:8000). To use Node's watch mode during development, run `npm run dev`.
 
-```bash
-# If in the same directory:
-cp index_updated.html index.html
-```
+The server uses port `8000` by default. Set the `PORT` environment variable to use a different port.
 
-### Step 3: Run the Server
-```bash
+## Run with Python (alternative)
+
+Install the Python dependencies and start FastAPI:
+
+```powershell
+python -m pip install -r requirements.txt
 python index.py
 ```
 
-The server will start at: **http://localhost:8000**
+Open [http://localhost:8000](http://localhost:8000). The app's API documentation is disabled by default.
 
----
+Run only one backend at a time unless you configure different ports and database settings.
 
-## 📱 Default Login Accounts
+## Initial accounts
 
-| Role | User ID | Password |
-|------|---------|----------|
-| 🛡️ Admin | `Samaresh` | `s1` |
-| 👤 Employee | `Bimal` | `b2` |
-| 👤 Employee | `Susama` | `s3` |
+On first startup, if the database has no users, the app creates these accounts:
 
----
+| Role | User ID | Default password |
+| --- | --- | --- |
+| Admin | `samaresh` | `s1` |
+| Employee | `bimal` | `b2` |
+| Employee | `susama` | `s3` |
 
-## ✅ Features Summary
+User IDs are case-insensitive. These defaults are only used when the `users` table is empty; starting the app again does not reset existing passwords. Set `ADMIN_DEFAULT_PASS`, `EMP1_DEFAULT_PASS`, and `EMP2_DEFAULT_PASS` before the first startup to choose initial passwords. Change default credentials before exposing the app to a network.
 
-### Input Validation
-```
-✓ Name Field
-  - Letters and spaces only
-  - No numbers allowed
-  - Example: "John Doe" ✓, "John123" ✗
+## Data and database
 
-✓ User ID Field
-  - Letters only
-  - No numbers allowed
-  - Example: "Samaresh" ✓, "Samaresh123" ✗
+SQLite is used unless `DATABASE_URL` starts with `postgres`. With SQLite, the database file `billing_system.db` is created in the directory where the server is started. Bills, users, and sessions are stored there and persist across restarts.
 
-✓ Phone Field
-  - 10 digits only (India)
-  - No country code needed (auto-adds +91)
-  - Example: "9876543210" → Stored as "919876543210"
-  - Display: "+919876543210"
-```
+To use PostgreSQL, set `DATABASE_URL` to your PostgreSQL connection URL. The Node backend includes the `pg` package. The Python backend also requires `psycopg2-binary`, which is listed in `requirements.txt`.
 
-### Database Storage
-- **SQLite database**: `billing_system.db`
-- Tables:
-  - `users` - User accounts and roles
-  - `bills` - All bill records
-  - `sessions` - User login sessions
+Back up the database regularly. **Deleting `billing_system.db` permanently removes the locally stored bills and accounts**; the app will create a new database and seed the initial accounts on its next startup.
 
-### Auto-Save Feature
-- Bills save automatically when created
-- Bills save automatically when updated
-- No additional "Save" action needed
-- Pending amount auto-calculated
+## Features and access
 
----
+- Create, view, and edit bills; pending balances are calculated from the amount and advance.
+- Bill creation dates are recorded automatically and displayed as `DD-MM-YY`. Enter delivery dates as `DD-MM-YY`; impossible dates and other formats are rejected. Two-digit years are interpreted as 2000-2099.
+- Track who created each bill and which worker completed its garment work. Any user can request a completed-work attribution change; the current worker or an admin must approve it before the requested worker is assigned, while admins can also update it directly. Admins can view completed-job counts grouped by worker and completion day.
+- Set delivery dates and receive a shared dashboard reminder starting three days before delivery; any authenticated user can accept it, reject it for the current session, or schedule it for another date.
+- Expand the garment-measurement section while entering a bill to save measurements (ঝুল, ছাতি, কোমর, পুট, হাতা, মহরী, মহড়া, পে, কছ); enter values such as `14` directly and tap the `1/2` button to add `½`. Open saved measurements from the customer name or the bill's measurement button.
+- All authenticated users can view and edit all bills.
+- Only admins can delete bills and manage users.
+- Admins can add employees with a name, phone number, and password; the app generates a unique login ID from the name and displays it after creation. Admins can also change roles, reset passwords, and delete users.
+- Phone numbers are entered as 10-digit Indian mobile numbers; the country code `91` is added for storage and WhatsApp links.
+- Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes, not as plaintext.
+- Sessions expire after 24 hours.
 
-## 🔐 Security Features
+## Configuration
 
-1. **Password Hashing**: SHA256 encryption
-2. **Session Tokens**: Secure token-based auth
-3. **Role-Based Access**:
-   - Admins: See all bills, manage users
-   - Employees: See only their own bills
-4. **Permission Checks**:
-   - Only admins can delete bills
-   - Employees can only edit their own bills
-   - Users can't delete themselves
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PORT` | Express server port | `8000` |
+| `DATABASE_URL` | PostgreSQL connection URL; SQLite is used otherwise | unset |
+| `ADMIN_DEFAULT_PASS` | Initial admin password when creating seed users | `s1` |
+| `EMP1_DEFAULT_PASS` | Initial password for `bimal` when creating seed users | `b2` |
+| `EMP2_DEFAULT_PASS` | Initial password for `susama` when creating seed users | `s3` |
+| `ALLOWED_ORIGINS` | Comma-separated allowed browser origins | `http://localhost:8000,http://127.0.0.1:8000,null` |
+| `ALLOWED_HOSTS` | Comma-separated allowed hostnames | `*` |
 
----
+For the Python backend, set `ENV=development` to enable Uvicorn reload. Do not expose a development server directly to the public internet.
 
-## 📊 Admin Features
+## Troubleshooting
 
-### User Management
-- ✓ Create new users
-- ✓ Reset passwords
-- ✓ Toggle role (Admin ↔ Employee)
-- ✓ Delete users
-- ✓ View all users
+### The page reports that the backend is unreachable
 
-### Bill Management
-- ✓ View all employee bills
-- ✓ Edit any bill
-- ✓ Delete bills
-- ✓ See who created each bill
+Confirm that one backend is running, then reload the page. Check the server console for startup or database errors.
 
----
+### Port 8000 is already in use
 
-## 👤 Employee Features
+Stop the other process using the port or set a different `PORT` for the Express backend. The Python entry point currently uses port `8000`.
 
-### Bill Management
-- ✓ Create own bills
-- ✓ Edit own bills
-- ✓ View own bills
-- ✓ Send WhatsApp messages
-- ✓ View statistics (filtered)
+### A default login does not work
 
-### Limitations
-- ✗ Cannot delete bills
-- ✗ Cannot see other employees' bills
-- ✗ Cannot manage users
+Seed accounts are created only when the `users` table is empty. Existing accounts and passwords are preserved on restart. Ask an administrator to reset the password, or check whether the database is the expected one.
 
----
+### Login is locked out after repeated attempts
 
-## 🐛 Troubleshooting
-
-### "Backend not reachable" Error
-**Solution**: Make sure `python index.py` is running in another terminal
-
-### Phone validation fails
-- Ensure you're entering exactly 10 digits
-- Example: `9876543210` (not `98 7654 3210` or `+919876543210`)
-
-### Name validation fails
-- Use only letters (A-Z, a-z)
-- Spaces are allowed
-- Example: `John Doe` ✓, `John-Doe` ✗
-
-### Database issues
-- Delete `billing_system.db` to reset
-- System will auto-create fresh database
-- **Warning**: This will delete all bills!
-
----
-
-## 📁 File Structure
-
-```
-project_folder/
-├── index.py              ← Backend (FastAPI)
-├── index.html            ← Frontend (React)
-└── billing_system.db     ← SQLite Database (auto-created)
-```
-
----
-
-## 🎯 Quick Demo
-
-### Create a Bill
-1. Login as `Bimal` / `b2`
-2. Click "+ Add New Bill"
-3. Enter:
-   - **Name**: `John Doe` (letters only)
-   - **Phone**: `9876543210` (10 digits, auto +91)
-   - **Bill No**: `B001`
-   - **Item**: `Embroidery Work`
-   - **Amount**: `5000`
-   - **Advance**: `1000`
-4. Click "✓ Save Bill"
-5. Bill is saved to database automatically!
-
-### Send WhatsApp
-1. Click "💬 WA" button on any bill
-2. Pre-filled message opens in WhatsApp
-
-### Admin: Manage Users
-1. Login as `Samaresh` / `s1`
-2. Click "👥 Manage Users"
-3. Create, edit, or delete users
-4. All user IDs must be letters only
-
----
-
-## 📈 Data Structure
-
-### Bill Record
-```json
-{
-  "id": 1,
-  "name": "John Doe",
-  "phone": "919876543210",
-  "billNo": "B001",
-  "orderTrack": "ORD-001",
-  "item": "Embroidery",
-  "amount": 5000,
-  "down": 1000,
-  "pending": 4000,
-  "created_by": "Bimal",
-  "created_at": "2024-01-15T10:30:00"
-}
-```
-
-### User Record
-```json
-{
-  "user_id": "Samaresh",
-  "name": "Administrator",
-  "role": "admin"
-}
-```
-
----
-
-## 🔄 Updates Overview
-
-| Feature | Before | After |
-|---------|--------|-------|
-| Storage | In-memory (lost on restart) | SQLite Database (persistent) |
-| Name Input | Any text | Letters & spaces only |
-| User ID | Any text | Letters only |
-| Phone | Any format | 10 digits, +91 India only |
-| Validation | None | Real-time validation |
-| Data Loss | Yes, on restart | No, always saved |
-| Bill Deletion | Anyone | Admin only |
-
----
-
-## 💡 Tips
-
-1. **Backup Database**: Copy `billing_system.db` regularly
-2. **Change Passwords**: Use admin panel to reset passwords
-3. **Export Data**: Write a script to query SQLite for reports
-4. **Bulk Operations**: SQL scripts can directly manipulate database
-
----
-
-## 📞 Support
-
-For issues, check:
-1. Backend console for error messages
-2. Browser console (F12) for frontend errors
-3. `billing_system.db` exists in project folder
-
----
-
-**Version**: 2.0 - Database Persistence  
-**Last Updated**: 2024  
-**Status**: ✅ Production Ready
+The firewall rate-limits login attempts. Wait five minutes before trying again.

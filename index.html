@@ -2,21 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Kalyani Embroidery Bill System</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<style>
-  /* Safe area padding and responsive adjustment for all devices, mobiles, and notches */
-  body {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-  .responsive-safe-header {
-    padding-top: max(16px, env(safe-area-inset-top, 16px));
-  }
-</style>
 </head>
 <body class="bg-white">
 <div id="root"></div>
@@ -33,36 +24,72 @@ const THEME_KEY = 'bbs_theme_preference';
 async function api(path, { method = 'GET', body, token } = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token) headers['Authorization'] = 'Bearer ' + token;
 
-  const res = await fetch(`${apiBase}${path}`, {
-    method, headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${apiBase}${path}`, {
+      method, headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    if (err instanceof TypeError) {
+      const launchHint = window.location.protocol === 'file:'
+        ? 'Start it with `npm start` or `python index.py`.'
+        : 'Check that the backend is running.';
+      throw new Error(`Cannot reach the backend at ${apiBase || window.location.origin}. ${launchHint}`);
+    }
+    throw err;
+  }
   let data = {};
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
-    const err = new Error(data.detail || `Request failed (${res.status})`);
+    const detail = Array.isArray(data.detail)
+      ? data.detail.map((d) => d.msg).join(', ')
+      : data.detail;
+    const err = new Error(detail || `Request failed (${res.status})`);
     err.status = res.status;
     throw err;
   }
   return data;
 }
 
-// Input validation helpers
-const validateName = (name) => /^[a-zA-Z\s]*$/.test(name);
-const validateUserId = (userId) => /^[a-zA-Z]*$/.test(userId);
-const validatePhone = (phone) => /^[0-9]*$/.test(phone) && phone.length <= 10;
 
-/* ============================================================
-   DISCLAIMER FOOTER
-   ============================================================ */
+const validateName = (name) => /^[a-zA-Z\s]+$/.test(name) && name.trim().length > 0;
+const validateUserId = (userId) => /^[a-zA-Z]+$/.test(userId) && userId.trim().length > 0;
+const validatePhone = (phone) => /^[0-9]{10}$/.test(phone);
+const validateMobile = (phone) => /^[6-9][0-9]{9}$/.test(phone);
+const formatDateDDMMYY = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  }).format(date).replace(/\//g, '-');
+};
+const parseDeliveryDateInput = (value) => {
+  const match = /^(\d{2})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = 2000 + Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null;
+  }
+  return `${year}-${match[2]}-${match[1]}`;
+};
+
+
 function DisclaimerFooter({ theme }) {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
-  
+
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700';
   const linkClass = theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700';
-  
+
   return (
     <>
       <div className={`border-t ${bgClass} mt-8 px-6 py-6 text-center text-xs`}>
@@ -70,9 +97,14 @@ function DisclaimerFooter({ theme }) {
           <strong>© 2026 Kalyani Embroidery</strong> | Private Property
         </p>
         <p className="mb-3 text-opacity-75">
-          Developed by <strong>Santanu Ghorai</strong> | 
+          Developed by <strong>Santanu Ghorai</strong> |
           <a href="mailto:santanughorai699@gmail.com" className={`ml-1 ${linkClass}`}>
             santanughorai699@gmail.com
+          </a>
+        </p>
+        <p className="mb-3">
+          <a href={`${apiBase}/api/health`} target="_blank" rel="noopener noreferrer" className={linkClass}>
+            Backend status
           </a>
         </p>
         <button
@@ -81,7 +113,7 @@ function DisclaimerFooter({ theme }) {
         >
           {showDisclaimer ? '▼ Hide Disclaimer' : '▶ View Disclaimer'}
         </button>
-        
+
         {showDisclaimer && (
           <div className={`mt-4 p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'} border text-left text-xs leading-relaxed`}>
             <h4 className="font-bold mb-2">⚠️ Disclaimer & Legal Notice</h4>
@@ -101,14 +133,191 @@ function DisclaimerFooter({ theme }) {
   );
 }
 
-/* ============================================================
-   LOGIN SCREEN
-   ============================================================ */
+
+function ForgotPasswordScreen({ onBack }) {
+  const [step, setStep]                       = useState('request');
+  const [userId, setUserId]                   = useState('');
+  const [otp, setOtp]                         = useState('');
+  const [newPassword, setNewPassword]         = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword]       = useState(false);
+  const [error, setError]                     = useState('');
+  const [notice, setNotice]                   = useState('');
+  const [busy, setBusy]                       = useState(false);
+
+  const requestOtp = async () => {
+    setError(''); setNotice('');
+    if (!validateUserId(userId.trim())) {
+      setError('User ID must contain only letters');
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await api('/api/forgot-password/send', {
+        method: 'POST',
+        body: { user_id: userId.trim() },
+      });
+      setNotice(data.message);
+      setStep('reset');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetPassword = async (e) => {
+    e.preventDefault();
+    setError(''); setNotice('');
+    if (!/^[0-9]{6}$/.test(otp)) {
+      setError('OTP must be 6 digits');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await api('/api/forgot-password/reset', {
+        method: 'POST',
+        body: { user_id: userId.trim(), otp, password: newPassword },
+      });
+      setNotice(data.message);
+      setStep('done');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 flex-col">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
+        <div className="text-center mb-8">
+          <div className="text-4xl mb-2">🔑</div>
+          <h1 className="text-2xl font-bold text-gray-900">Forgot Password</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {step === 'request' && 'Enter your User ID to receive an OTP on your registered mobile number'}
+            {step === 'reset' && 'Enter the 6-digit OTP and set a new password'}
+            {step === 'done' && 'Your password has been changed'}
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {notice && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            {notice}
+          </div>
+        )}
+
+        {step === 'request' && (
+          <form onSubmit={(e) => { e.preventDefault(); requestOtp(); }} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+              <input type="text" value={userId} required
+                onChange={(e) => setUserId(e.target.value.replace(/[^a-zA-Z]/g, ''))}
+                autoComplete="username" placeholder="e.g. username"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <button type="submit" disabled={busy}
+              className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors">
+              {busy ? 'Sending OTP…' : 'Send OTP'}
+            </button>
+            <div className="text-center">
+              <button type="button" onClick={onBack}
+                className="text-sm text-gray-600 hover:underline">
+                ← Back to Sign In
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 'reset' && (
+          <form onSubmit={resetPassword} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">OTP</label>
+              <input type="text" inputMode="numeric" value={otp} required
+                onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                autoComplete="one-time-code" placeholder="6-digit OTP"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono tracking-widest" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input type={showPassword ? 'text' : 'password'} value={newPassword} required
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password" placeholder="Minimum 6 characters"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input type={showPassword ? 'text' : 'password'} value={confirmPassword} required
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password" placeholder="Re-enter new password"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="flex items-center mt-2">
+                <input type="checkbox" id="showResetPassword"
+                  checked={showPassword}
+                  onChange={() => setShowPassword(!showPassword)}
+                  className="h-4 w-4 text-blue-600 rounded border-gray-300 cursor-pointer" />
+                <label htmlFor="showResetPassword"
+                  className="ml-2 text-sm text-gray-600 cursor-pointer select-none">
+                  Show Password
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" disabled={busy}
+              className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors">
+              {busy ? 'Resetting…' : 'Reset Password'}
+            </button>
+
+            <div className="flex justify-between text-xs">
+              <button type="button" onClick={requestOtp} disabled={busy}
+                className="text-blue-600 hover:underline disabled:opacity-60">
+                Resend OTP
+              </button>
+              <button type="button" onClick={onBack}
+                className="text-gray-600 hover:underline">
+                Back to Sign In
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 'done' && (
+          <button type="button" onClick={onBack}
+            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+            Back to Sign In
+          </button>
+        )}
+      </div>
+
+      <DisclaimerFooter theme="light" />
+    </div>
+  );
+}
+
+
 function LoginScreen({ onLogin }) {
-  const [userId, setUserId]     = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
-  const [busy, setBusy]         = useState(false);
+  const [userId, setUserId]             = useState('');
+  const [password, setPassword]         = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgot, setShowForgot]     = useState(false);
+  const [error, setError]               = useState('');
+  const [busy, setBusy]                 = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -130,8 +339,12 @@ function LoginScreen({ onLogin }) {
     }
   };
 
+  if (showForgot) {
+    return <ForgotPasswordScreen onBack={() => setShowForgot(false)} />;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 flex-col responsive-safe-header">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 flex items-center justify-center px-4 flex-col">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">🧾</div>
@@ -147,19 +360,44 @@ function LoginScreen({ onLogin }) {
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">User ID </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
             <input type="text" value={userId} required
               onChange={(e) => setUserId(e.target.value.replace(/[^a-zA-Z]/g, ''))}
               autoComplete="username" placeholder="e.g. username"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" value={password} required
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">Password</label>
+              <button type="button" onClick={() => setShowForgot(true)}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                Forgot Password?
+              </button>
+            </div>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              required
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password" placeholder="••••••••"
+              autoComplete="current-password"
+              placeholder="••••••••"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+
+            <div className="flex items-center mt-2">
+              <input
+                type="checkbox"
+                id="showLoginPassword"
+                checked={showPassword}
+                onChange={() => setShowPassword(!showPassword)}
+                className="h-4 w-4 text-blue-600 rounded border-gray-300 cursor-pointer" />
+              <label htmlFor="showLoginPassword"
+                className="ml-2 text-sm text-gray-600 cursor-pointer select-none">
+                Show Password
+              </label>
+            </div>
           </div>
+
           <button type="submit" disabled={busy}
             className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors">
             {busy ? 'Signing in…' : 'Sign In'}
@@ -168,25 +406,22 @@ function LoginScreen({ onLogin }) {
 
         <div className="mt-6 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">
           <p className="font-semibold text-gray-700 mb-1">Default Accounts</p>
-          <p>🛡️ Admin: <span className="font-mono">Samaresh</span></p>
-          <p>👤 Employee: <span className="font-mono">Bimal</span></p>
-          <p>👤 Employee: <span className="font-mono">Susama</span></p>
+          <p>🛡️ Admin</p>
+          <p>👤 Employee</p>
         </div>
       </div>
-      
+
       <DisclaimerFooter theme="light" />
     </div>
   );
 }
 
-/* ============================================================
-   USER MANAGER (ADMIN ONLY)
-   ============================================================ */
+
 function UserManager({ request, currentUserId, theme, cardClass }) {
   const [users, setUsers]   = useState([]);
   const [error, setError]   = useState('');
   const [notice, setNotice] = useState('');
-  const [form, setForm]     = useState({ user_id: '', password: '', name: '', role: 'employee' });
+  const [form, setForm]     = useState({ password: '', name: '', phone: '' });
 
   const inputClass = `px-3 py-2 border rounded outline-none ${
     theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
@@ -202,20 +437,20 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
   const createUser = async (e) => {
     e.preventDefault();
     setError(''); setNotice('');
-    
-    if (!validateUserId(form.user_id)) {
-      setError('User ID must contain only letters');
-      return;
-    }
+
     if (!validateName(form.name)) {
       setError('Name must contain only letters and spaces');
       return;
     }
-    
+    if (!validateMobile(form.phone)) {
+      setError('Mobile number must be a valid 10-digit Indian number');
+      return;
+    }
+
     try {
-      await request('/api/users', { method: 'POST', body: form });
-      setNotice(`User "${form.user_id}" created.`);
-      setForm({ user_id: '', password: '', name: '', role: 'employee' });
+      const created = await request('/api/users', { method: 'POST', body: form });
+      setNotice(`Employee "${created.name}" created. Login ID: "${created.user_id}".`);
+      setForm({ password: '', name: '', phone: '' });
       load();
     } catch (err) { setError(err.message); }
   };
@@ -240,6 +475,22 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
     } catch (err) { setError(err.message); }
   };
 
+  const updatePhone = async (id) => {
+    const input = window.prompt(`Mobile number for "${id}" (10 digits):`);
+    if (input === null) return;
+    const phone = input.replace(/[^0-9]/g, '');
+    setError(''); setNotice('');
+    if (!validateMobile(phone)) {
+      setError('Mobile number must be a valid 10-digit Indian number');
+      return;
+    }
+    try {
+      await request(`/api/users/${id}/phone`, { method: 'PUT', body: { phone } });
+      setNotice(`Mobile number updated for "${id}".`);
+      load();
+    } catch (err) { setError(err.message); }
+  };
+
   const toggleRole = async (id, role) => {
     setError(''); setNotice('');
     try {
@@ -257,19 +508,15 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
       {notice && <div className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{notice}</div>}
 
       <form onSubmit={createUser} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <input type="text" placeholder="User ID (letters)" required value={form.user_id}
-          onChange={(e) => setForm({ ...form, user_id: e.target.value.replace(/[^a-zA-Z]/g, '') })} className={inputClass} />
-        <input type="text" placeholder="Full Name (letters)" value={form.name}
+        <input type="text" placeholder="Full Name (letters)" required value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value.replace(/[^a-zA-Z\s]/g, '') })} className={inputClass} />
-        <input type="text" placeholder="Password" required value={form.password}
+        <input type="text" placeholder="Mobile (10 digits)" required value={form.phone} maxLength="10"
+          onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })} className={inputClass} />
+        <input type="password" placeholder="Password (6+ characters)" required minLength="6" value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} />
-        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={inputClass}>
-          <option value="employee">Employee</option>
-          <option value="admin">Admin</option>
-        </select>
         <button type="submit"
           className="col-span-1 sm:col-span-2 md:col-span-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium">
-          + Create User
+          + Add Employee
         </button>
       </form>
 
@@ -279,6 +526,7 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
             <tr>
               <th className="px-4 py-2 text-left">User ID</th>
               <th className="px-4 py-2 text-left">Name</th>
+              <th className="px-4 py-2 text-left">Mobile</th>
               <th className="px-4 py-2 text-left">Role</th>
               <th className="px-4 py-2 text-left">Actions</th>
             </tr>
@@ -288,6 +536,9 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
               <tr key={u.user_id}>
                 <td className="px-4 py-2 font-mono">{u.user_id}</td>
                 <td className="px-4 py-2">{u.name}</td>
+                <td className="px-4 py-2 font-mono">
+                  {u.phone ? `+91 ${u.phone}` : <span className="text-red-500 text-xs font-sans">Not set</span>}
+                </td>
                 <td className="px-4 py-2">
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                     u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
@@ -297,6 +548,10 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
                   <button onClick={() => resetPassword(u.user_id)}
                     className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs">
                     Reset Password
+                  </button>
+                  <button onClick={() => updatePhone(u.user_id)}
+                    className="px-3 py-1 bg-teal-600 text-white rounded hover:bg-teal-700 text-xs">
+                    Set Mobile
                   </button>
                   <button onClick={() => toggleRole(u.user_id, u.role === 'admin' ? 'employee' : 'admin')}
                     className="px-3 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 text-xs">
@@ -318,9 +573,7 @@ function UserManager({ request, currentUserId, theme, cardClass }) {
   );
 }
 
-/* ============================================================
-   DASHBOARD
-   ============================================================ */
+
 function BillingDashboard({ session, onLogout }) {
   const { token, user } = session;
   const isAdmin = user.role === 'admin';
@@ -328,8 +581,7 @@ function BillingDashboard({ session, onLogout }) {
   const [bills, setBills]         = useState([]);
   const [error, setError]         = useState('');
   const [searchTerm, setSearch]   = useState('');
-  
-  // Theme state: loaded from localStorage (default to 'light')
+
   const [theme, setTheme]         = useState(() => {
     return localStorage.getItem(THEME_KEY) || 'light';
   });
@@ -339,19 +591,134 @@ function BillingDashboard({ session, onLogout }) {
   const [editingId, setEditingId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Profile Modal & Avatar upload state
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(() => {
     return localStorage.getItem(PROFILE_AVATAR_KEY + user.user_id) || '';
   });
   const fileInputRef = useRef(null);
-  
+  const itemPickerRef = useRef(null);
+  const measurementPickerRef = useRef(null);
+  const itemOptions = ['Blouse', 'Churider', 'Pant', 'Lehenga', 'Sari'];
+  const measurementFields = ['ঝুল', 'ছাতি', 'কোমর', 'পুট', 'হাতা', 'মহরী', 'মহড়া', 'পে', 'কছ'];
+
+  const parseItemSummary = (summary) => {
+    const current = Object.fromEntries(itemOptions.map((item) => [item, 0]));
+    if (!summary) return current;
+
+    summary.split(',').forEach((chunk) => {
+      const trimmed = chunk.trim();
+      if (!trimmed) return;
+      const match = trimmed.match(/^(\d+)\s+(.+)$/i);
+      if (!match) return;
+      const qty = Number(match[1]);
+      const itemName = match[2].trim();
+      const normalized = itemOptions.find((option) => option.toLowerCase() === itemName.toLowerCase());
+      if (normalized) current[normalized] = qty;
+    });
+    return current;
+  };
+
+  const buildItemSummary = (quantities) => {
+    return itemOptions
+      .filter((option) => Number(quantities[option] || 0) > 0)
+      .map((option) => `${quantities[option]} ${option}`)
+      .join(', ');
+  };
+
+  const [itemQuantities, setItemQuantities] = useState(() => Object.fromEntries(itemOptions.map((item) => [item, 0])));
+  const [selectedItemOptions, setSelectedItemOptions] = useState([]);
+  const [showItemOptions, setShowItemOptions] = useState(false);
+  const [showMeasurementOptions, setShowMeasurementOptions] = useState(false);
+  const [phoneInput, setPhoneInput]     = useState('');
+  const [currentPhone, setCurrentPhone] = useState('');
+  const [phoneNotice, setPhoneNotice]   = useState('');
+  const [phoneError, setPhoneError]     = useState('');
+  const [deliveryAlertError, setDeliveryAlertError] = useState('');
+  const [acceptingDeliveryAlert, setAcceptingDeliveryAlert] = useState(false);
+  const [dismissedDeliveryAlertIds, setDismissedDeliveryAlertIds] = useState(() => new Set());
+  const [showReminderReschedule, setShowReminderReschedule] = useState(false);
+  const [deliveryReminderDate, setDeliveryReminderDate] = useState('');
+  const [measurementBill, setMeasurementBill] = useState(null);
+  const [employeeUsers, setEmployeeUsers] = useState([]);
+  const [workTrackingError, setWorkTrackingError] = useState('');
+  const [workTrackingNotice, setWorkTrackingNotice] = useState('');
+  const [savingWorkTracking, setSavingWorkTracking] = useState(false);
+  const [workEditMode, setWorkEditMode] = useState(false);
+  const [workEditEmployee, setWorkEditEmployee] = useState('');
+  const [pendingWorkRequests, setPendingWorkRequests] = useState([]);
+  const [showWorkStats, setShowWorkStats] = useState(false);
+  const [workStats, setWorkStats] = useState([]);
+  const [workStatsError, setWorkStatsError] = useState('');
+  const [loadingWorkStats, setLoadingWorkStats] = useState(false);
+
   const [formData, setFormData]   = useState({
-    name: '', phone: '', billNo: '', orderTrack: '', item: '', amount: '', down: ''
+    name: '', phone: '', billNo: '', item: '', deliveryDate: '',
+    measurements: Object.fromEntries(measurementFields.map((field) => [field, ''])),
+    amount: '', down: ''
   });
   const [formError, setFormError] = useState('');
 
-  // Live time ticker only (auto theme change removed so user can manually choose)
+  useEffect(() => {
+    if (!showItemOptions) return;
+
+    const closeOnOutsideClick = (event) => {
+      if (!itemPickerRef.current?.contains(event.target)) {
+        setShowItemOptions(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setShowItemOptions(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [showItemOptions]);
+
+  useEffect(() => {
+    if (!showMeasurementOptions) return;
+
+    const closeOnOutsideClick = (event) => {
+      if (!measurementPickerRef.current?.contains(event.target)) {
+        setShowMeasurementOptions(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setShowMeasurementOptions(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [showMeasurementOptions]);
+
+  const toggleItemOption = (option) => {
+    const isSelected = selectedItemOptions.includes(option);
+    const nextSelected = isSelected
+      ? selectedItemOptions.filter((item) => item !== option)
+      : [...selectedItemOptions, option];
+    const nextQuantities = {
+      ...itemQuantities,
+      [option]: isSelected ? 0 : Math.max(1, Number(itemQuantities[option]) || 1),
+    };
+    setSelectedItemOptions(nextSelected);
+    setItemQuantities(nextQuantities);
+    setFormData({ ...formData, item: buildItemSummary(nextQuantities) });
+  };
+
+  const updateItemQuantity = (option, qty) => {
+    const nextQty = Math.max(0, Number(qty) || 0);
+    const next = { ...itemQuantities, [option]: nextQty };
+    setItemQuantities(next);
+    setFormData({ ...formData, item: buildItemSummary(next) });
+  };
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -359,7 +726,6 @@ function BillingDashboard({ session, onLogout }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Handle theme switch and save to localStorage
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
@@ -371,15 +737,194 @@ function BillingDashboard({ session, onLogout }) {
     catch (err) { if (err.status === 401) onLogout(); throw err; }
   }, [token, onLogout]);
 
-  const loadBills = async () => {
-    try { setBills(await request('/api/bills')); setError(''); }
-    catch (err) {
-      if (err.status !== 401)
-        setError('Backend not reachable. Start it with: python index.py');
+  useEffect(() => {
+    if (!measurementBill) return;
+    let active = true;
+    setWorkEditMode(false);
+    setWorkEditEmployee(measurementBill.work_completed_by || '');
+    setWorkTrackingError('');
+    setWorkTrackingNotice('');
+    request('/api/workers')
+      .then((users) => {
+        if (active) setEmployeeUsers(users);
+      })
+      .catch((err) => {
+        if (active) setWorkTrackingError(err.message);
+      });
+    return () => { active = false; };
+  }, [measurementBill?.id, request]);
+
+  const loadWorkChangeRequests = useCallback(async () => {
+    try {
+      setPendingWorkRequests(await request('/api/work-change-requests'));
+    } catch (err) {
+      if (err.status !== 401) setWorkTrackingError(err.message);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    loadWorkChangeRequests();
+    const timer = setInterval(loadWorkChangeRequests, 10000);
+    return () => clearInterval(timer);
+  }, [loadWorkChangeRequests]);
+
+  const respondToWorkChange = async (changeRequest, accept) => {
+    setSavingWorkTracking(true);
+    setWorkTrackingError('');
+    try {
+      const result = await request(`/api/bills/${changeRequest.bill_id}/work-change-response`, {
+        method: 'POST',
+        body: { accept },
+      });
+      setBills((currentBills) => currentBills.map((bill) =>
+        bill.id === changeRequest.bill_id ? { ...bill, ...result } : bill
+      ));
+      setMeasurementBill((bill) =>
+        bill?.id === changeRequest.bill_id ? { ...bill, ...result } : bill
+      );
+      setPendingWorkRequests((currentRequests) =>
+        currentRequests.filter((requestItem) => requestItem.bill_id !== changeRequest.bill_id)
+      );
+    } catch (err) {
+      if (err.status !== 401) setWorkTrackingError(err.message);
+    } finally {
+      setSavingWorkTracking(false);
     }
   };
 
-  useEffect(() => { loadBills(); }, []);
+  const submitWorkChange = async () => {
+    if (!measurementBill || !workEditEmployee) return;
+    const target = employeeUsers.find((account) => account.user_id === workEditEmployee);
+    if (!target) {
+      setWorkTrackingError('একজন valid কর্মী নির্বাচন করুন।');
+      return;
+    }
+    setSavingWorkTracking(true);
+    setWorkTrackingError('');
+    setWorkTrackingNotice('');
+    try {
+      if (isAdmin) {
+        const result = await request(`/api/bills/${measurementBill.id}/work-complete`, {
+          method: 'PUT',
+          body: { workerId: target.user_id },
+        });
+        setBills((currentBills) => currentBills.map((bill) =>
+          bill.id === measurementBill.id ? { ...bill, ...result } : bill
+        ));
+        setMeasurementBill((bill) => bill?.id === measurementBill.id ? { ...bill, ...result } : bill);
+        setWorkTrackingNotice('কাজের কর্মী পরিবর্তন সংরক্ষিত হয়েছে।');
+      } else {
+        const result = await request(`/api/bills/${measurementBill.id}/work-change-request`, {
+          method: 'POST',
+          body: { workerId: target.user_id },
+        });
+        const pendingChange = {
+          work_change_requested_by: result.work_change_requested_by,
+          work_change_requested_by_name: result.work_change_requested_by_name,
+          work_change_requested_to: result.work_change_requested_to,
+          work_change_requested_to_name: result.work_change_requested_to_name,
+          work_change_requested_at: result.work_change_requested_at,
+        };
+        setBills((currentBills) => currentBills.map((bill) =>
+          bill.id === measurementBill.id ? { ...bill, ...pendingChange } : bill
+        ));
+        setMeasurementBill((bill) => bill?.id === measurementBill.id ? { ...bill, ...pendingChange } : bill);
+        setWorkTrackingNotice(`বর্তমান কর্মী অথবা Admin-এর অনুমতির জন্য অনুরোধ পাঠানো হয়েছে। নতুন কর্মী: ${target.name}।`);
+      }
+      setWorkEditMode(false);
+    } catch (err) {
+      if (err.status !== 401) setWorkTrackingError(err.message);
+    } finally {
+      setSavingWorkTracking(false);
+    }
+  };
+
+  const openWorkStats = async () => {
+    setShowWorkStats(true);
+    setLoadingWorkStats(true);
+    setWorkStatsError('');
+    try {
+      setWorkStats(await request('/api/work-stats'));
+    } catch (err) {
+      if (err.status !== 401) setWorkStatsError(err.message);
+    } finally {
+      setLoadingWorkStats(false);
+    }
+  };
+
+  const markWorkComplete = async (bill) => {
+    setSavingWorkTracking(true);
+    setWorkTrackingError('');
+    try {
+      const completion = await request(`/api/bills/${bill.id}/work-complete`, { method: 'POST' });
+      const updatedBill = { ...bill, ...completion };
+      setBills((currentBills) => currentBills.map((currentBill) =>
+        currentBill.id === bill.id ? { ...currentBill, ...completion } : currentBill
+      ));
+      setMeasurementBill((currentBill) => currentBill?.id === bill.id ? updatedBill : currentBill);
+    } catch (err) {
+      if (err.status !== 401) setWorkTrackingError(err.message);
+    } finally {
+      setSavingWorkTracking(false);
+    }
+  };
+
+  const acceptDeliveryAlert = async (bill) => {
+    setAcceptingDeliveryAlert(true);
+    setDeliveryAlertError('');
+    try {
+      await request(`/api/bills/${bill.id}/delivery-alert/accept`, { method: 'POST' });
+      setBills((currentBills) => currentBills.map((currentBill) =>
+        currentBill.id === bill.id ? { ...currentBill, delivery_alert_accepted: 1 } : currentBill
+      ));
+    } catch (err) {
+      if (err.status !== 401) setDeliveryAlertError(err.message);
+    } finally {
+      setAcceptingDeliveryAlert(false);
+    }
+  };
+
+  const dismissDeliveryAlert = (bill) => {
+    setDismissedDeliveryAlertIds((currentIds) => new Set(currentIds).add(bill.id));
+    setDeliveryAlertError('');
+    setShowReminderReschedule(false);
+  };
+
+  const scheduleDeliveryReminder = async (bill) => {
+    setAcceptingDeliveryAlert(true);
+    setDeliveryAlertError('');
+    try {
+      await request(`/api/bills/${bill.id}/delivery-alert/remind`, {
+        method: 'POST',
+        body: { remindOn: deliveryReminderDate },
+      });
+      setBills((currentBills) => currentBills.map((currentBill) =>
+        currentBill.id === bill.id
+          ? { ...currentBill, delivery_remind_on: deliveryReminderDate }
+          : currentBill
+      ));
+      setShowReminderReschedule(false);
+      setDeliveryReminderDate('');
+    } catch (err) {
+      if (err.status !== 401) setDeliveryAlertError(err.message);
+    } finally {
+      setAcceptingDeliveryAlert(false);
+    }
+  };
+
+  const loadBills = useCallback(async () => {
+    try { setBills(await request('/api/bills')); setError(''); }
+    catch (err) {
+      if (err.status !== 401)
+        setError(err.message);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    loadBills();
+    const timer = setInterval(loadBills, 15000);
+    return () => clearInterval(timer);
+  }, [loadBills]);
 
   const filteredBills = bills.filter(b =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -387,18 +932,66 @@ function BillingDashboard({ session, onLogout }) {
     b.phone.includes(searchTerm)
   );
 
+  const reminderLimit = new Date(currentTime);
+  reminderLimit.setHours(0, 0, 0, 0);
+  reminderLimit.setDate(reminderLimit.getDate() + 3);
+  const reminderLimitDate = [
+    reminderLimit.getFullYear(),
+    String(reminderLimit.getMonth() + 1).padStart(2, '0'),
+    String(reminderLimit.getDate()).padStart(2, '0'),
+  ].join('-');
+  const todayDate = [
+    currentTime.getFullYear(),
+    String(currentTime.getMonth() + 1).padStart(2, '0'),
+    String(currentTime.getDate()).padStart(2, '0'),
+  ].join('-');
+  const tomorrowDate = new Date(currentTime);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowDateValue = [
+    tomorrowDate.getFullYear(),
+    String(tomorrowDate.getMonth() + 1).padStart(2, '0'),
+    String(tomorrowDate.getDate()).padStart(2, '0'),
+  ].join('-');
+  const activeDeliveryAlert = bills
+    .filter((bill) =>
+      bill.delivery_date &&
+      Number(bill.delivery_alert_accepted) !== 1 &&
+      !dismissedDeliveryAlertIds.has(bill.id) &&
+      (bill.delivery_remind_on
+        ? bill.delivery_remind_on <= todayDate
+        : bill.delivery_date <= reminderLimitDate)
+    )
+    .sort((a, b) => a.delivery_date.localeCompare(b.delivery_date))[0];
+
   const resetForm = () => {
     setEditingId(null);
-    setFormData({ name: '', phone: '', billNo: '', orderTrack: '', item: '', amount: '', down: '' });
+    const emptyQuantities = Object.fromEntries(itemOptions.map((item) => [item, 0]));
+    setItemQuantities(emptyQuantities);
+    setSelectedItemOptions([]);
+    setShowItemOptions(false);
+    const nextBillNumber = bills.reduce((highest, bill) => {
+      const billNumber = String(bill.billNo).trim();
+      return /^\d+$/.test(billNumber) ? Math.max(highest, Number(billNumber)) : highest;
+    }, -1) + 1;
+    setFormData({
+      name: '', phone: '', billNo: String(nextBillNumber).padStart(4, '0'), item: '', deliveryDate: '',
+      measurements: Object.fromEntries(measurementFields.map((field) => [field, ''])),
+      amount: '', down: ''
+    });
     setFormError('');
   };
 
   const handleEdit = (bill) => {
     setEditingId(bill.id);
     const phoneWithoutCode = bill.phone.replace(/^91/, '');
+    const quantities = parseItemSummary(bill.item || '');
+    setItemQuantities(quantities);
+    setSelectedItemOptions(itemOptions.filter((item) => quantities[item] > 0));
+    setShowItemOptions(true);
     setFormData({
       name: bill.name, phone: phoneWithoutCode, billNo: bill.billNo,
-      orderTrack: bill.orderTrack, item: bill.item,
+      item: bill.item, deliveryDate: bill.delivery_date ? formatDateDDMMYY(bill.delivery_date) : '',
+      measurements: Object.fromEntries(measurementFields.map((field) => [field, bill.measurements?.[field] || ''])),
       amount: bill.amount.toString(), down: bill.down.toString(),
     });
     setShowForm(true);
@@ -409,7 +1002,7 @@ function BillingDashboard({ session, onLogout }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError('');
-    
+
     if (!validateName(formData.name)) {
       setFormError('Name must contain only letters and spaces');
       return;
@@ -422,9 +1015,15 @@ function BillingDashboard({ session, onLogout }) {
       setFormError('Bill No is required');
       return;
     }
-    
+    const deliveryDate = parseDeliveryDateInput(formData.deliveryDate);
+    if (!deliveryDate) {
+      setFormError('ডেলিভারি তারিখ সঠিক DD-MM-YY ফরম্যাটে লিখুন (দিন-মাস-বছর)।');
+      return;
+    }
+
     const payload = {
       ...formData,
+      deliveryDate,
       amount: parseFloat(formData.amount) || 0,
       down: parseFloat(formData.down) || 0,
     };
@@ -437,7 +1036,7 @@ function BillingDashboard({ session, onLogout }) {
       resetForm();
       setShowForm(false);
       setError('');
-    } catch (err) { 
+    } catch (err) {
       if (err.status !== 401) {
         setFormError(err.message);
       }
@@ -451,18 +1050,17 @@ function BillingDashboard({ session, onLogout }) {
   };
 
   const sendWhatsApp = (bill) => {
-    const msg = `Hello ${bill.name},\n\nYour Bill Details:\n📋 Bill No: ${bill.billNo}\n📦 Item: ${bill.item}\n💰 Total Amount: ₹${bill.amount}\n✅ Advance Payment: ₹${bill.down}\n⏳ Pending Amount: ₹${bill.pending}\n📍 Order Track: ${bill.orderTrack}\n\nThank you!`;
+    const deliveryDateText = bill.delivery_date ? `\n📅 Delivery Date: ${formatDateDDMMYY(bill.delivery_date)}` : '';
+    const msg = `Hello ${bill.name},\n\nYour Bill Details:\n📋 Bill No: ${bill.billNo}\n📦 Item: ${bill.item}${deliveryDateText}\n💰 Total Amount: ₹${bill.amount}\n✅ Advance Payment: ₹${bill.down}\n⏳ Pending Amount: ₹${bill.pending}\n\nThank you!`;
     window.open(`https://wa.me/${bill.phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // Logout with confirmation notice
   const confirmAndLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
       onLogout();
     }
   };
 
-  // Profile Photo Upload Handler
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -481,7 +1079,33 @@ function BillingDashboard({ session, onLogout }) {
     localStorage.removeItem(PROFILE_AVATAR_KEY + user.user_id);
   };
 
-  // Determine Greeting based on time of day
+  const openProfileModal = async () => {
+    setShowProfileModal(true);
+    setPhoneNotice(''); setPhoneError('');
+    try {
+      const me = await request('/api/me');
+      setCurrentPhone(me.phone || '');
+      setPhoneInput(me.phone || '');
+    } catch (err) {
+      setPhoneError(err.message);
+    }
+  };
+
+  const savePhone = async () => {
+    setPhoneNotice(''); setPhoneError('');
+    if (!validateMobile(phoneInput)) {
+      setPhoneError('Mobile number must be a valid 10-digit Indian number');
+      return;
+    }
+    try {
+      await request(`/api/users/${user.user_id}/phone`, { method: 'PUT', body: { phone: phoneInput } });
+      setCurrentPhone(phoneInput);
+      setPhoneNotice('Mobile number saved.');
+    } catch (err) {
+      setPhoneError(err.message);
+    }
+  };
+
   const hours = currentTime.getHours();
   let greetingText = 'Good Night 🌙';
   if (hours >= 5 && hours < 12) {
@@ -497,15 +1121,295 @@ function BillingDashboard({ session, onLogout }) {
   const inputClass = `px-3 py-2 border rounded outline-none ${
     theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
   }`;
+  const activeWorkChangeRequest = pendingWorkRequests[0];
 
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300`}>
-      {/* HEADER WITH PROFILE SECTION & LOGOUT - ADJUSTED WITH SAFE AREA PADDING */}
-      <div className={`border-b shadow-sm responsive-safe-header ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+
+      {activeWorkChangeRequest && (
+        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="work-change-title" className={`${cardClass} w-full max-w-md border rounded-xl p-6 shadow-2xl`}>
+            <h2 id="work-change-title" className="text-xl font-bold mb-3">কাজের কর্মী পরিবর্তনের অনুরোধ</h2>
+            <p className="mb-2">
+              {activeWorkChangeRequest.requester_name} কাজটি {activeWorkChangeRequest.target_name}-এর কাছে দিতে চাইছেন।
+            </p>
+            <p className="mb-2"><strong>বর্তমান কর্মী:</strong> {activeWorkChangeRequest.current_worker_name}</p>
+            <p className="mb-1"><strong>Customer:</strong> {activeWorkChangeRequest.customer_name}</p>
+            <p className="mb-4"><strong>Bill No:</strong> {activeWorkChangeRequest.billNo}</p>
+            <p className="mb-4 text-sm opacity-80">
+              Accept করলে কাজটি {activeWorkChangeRequest.target_name}-এর নামে হবে। Reject করলে বর্তমান কর্মী অপরিবর্তিত থাকবে।
+            </p>
+            {workTrackingError && <p role="alert" className="mb-3 text-sm text-red-500">{workTrackingError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => respondToWorkChange(activeWorkChangeRequest, false)}
+                disabled={savingWorkTracking}
+                className="min-h-11 rounded-lg border px-4 py-2 font-semibold disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => respondToWorkChange(activeWorkChangeRequest, true)}
+                disabled={savingWorkTracking}
+                className="min-h-11 rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {savingWorkTracking ? 'সংরক্ষণ হচ্ছে…' : 'Accept'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWorkStats && (
+        <div className="fixed inset-0 z-[105] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowWorkStats(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="work-stats-title"
+            onClick={(event) => event.stopPropagation()}
+            className={`${cardClass} w-full max-w-2xl border rounded-xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto`}
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 id="work-stats-title" className="text-lg font-bold">দিন অনুযায়ী কাজের হিসাব</h2>
+              <button type="button" onClick={() => setShowWorkStats(false)} aria-label="Close work statistics" className="text-gray-400 hover:text-gray-200 text-xl">✕</button>
+            </div>
+            {workStatsError && <p role="alert" className="mb-3 text-sm text-red-500">{workStatsError}</p>}
+            {loadingWorkStats ? (
+              <p className="py-6 text-center">হিসাব লোড হচ্ছে…</p>
+            ) : workStats.length === 0 ? (
+              <p className="py-6 text-center opacity-70">এখনও কোনো কাজ সম্পন্ন করা হয়নি।</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className={theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}>
+                    <tr>
+                      <th className="px-3 py-2 text-left">তারিখ</th>
+                      <th className="px-3 py-2 text-left">কর্মী</th>
+                      <th className="px-3 py-2 text-left">Role</th>
+                      <th className="px-3 py-2 text-right">কাজের সংখ্যা</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workStats.map((entry) => (
+                      <tr key={`${entry.work_date}-${entry.worker_id}`} className="border-b border-gray-500/20">
+                        <td className="px-3 py-2">{entry.work_date}</td>
+                        <td className="px-3 py-2">{entry.worker_name}</td>
+                        <td className="px-3 py-2">{entry.worker_role === 'admin' ? 'Admin' : 'Employee'}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{entry.job_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {measurementBill && (
+        <div className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4" onClick={() => setMeasurementBill(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="measurement-title"
+            onClick={(event) => event.stopPropagation()}
+            className={`${cardClass} border rounded-xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto`}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 id="measurement-title" className="text-lg font-bold">পোশাকের মাপ</h2>
+                <p className="text-sm opacity-75">
+                  {measurementBill.name} · Bill #{measurementBill.billNo}
+                  {' · বিলের তারিখ: '}{formatDateDDMMYY(measurementBill.created_at)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMeasurementBill(null)}
+                aria-label="Close measurements"
+                className="text-gray-400 hover:text-gray-200 text-lg"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`col-span-2 rounded border px-3 py-2 text-sm ${theme === 'dark' ? 'border-gray-700 bg-gray-700/60' : 'border-gray-200 bg-gray-50'}`}>
+                <p><span className="font-semibold">Bill তৈরি করেছেন:</span> {measurementBill.created_by_name || measurementBill.created_by || '—'}</p>
+                <p className="mt-1"><span className="font-semibold">কাজ সম্পন্ন করেছেন:</span> {measurementBill.work_completed_by_name || 'এখনও সম্পন্ন হয়নি'}</p>
+                {measurementBill.work_completed_at && (
+                  <p className="mt-1 text-xs opacity-75">
+                    সময়: {new Date(measurementBill.work_completed_at).toLocaleString()}
+                  </p>
+                )}
+                {!measurementBill.work_completed_by && (
+                  <button
+                    type="button"
+                    onClick={() => markWorkComplete(measurementBill)}
+                    disabled={savingWorkTracking}
+                    className="mt-3 min-h-10 rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                  >
+                    {savingWorkTracking ? 'সংরক্ষণ হচ্ছে…' : '✓ কাজ সম্পন্ন'}
+                  </button>
+                )}
+                {measurementBill.work_completed_by && (
+                  <div className="mt-3">
+                    {measurementBill.work_change_requested_to && (
+                      <p className="text-sm text-amber-600">
+                        {measurementBill.work_change_requested_to_name || measurementBill.work_change_requested_to} নতুন কর্মী হবেন—বর্তমান কর্মী অথবা Admin-এর অনুমতির অপেক্ষায়।
+                      </p>
+                    )}
+                    {!workEditMode ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWorkEditEmployee(measurementBill.work_completed_by);
+                          setWorkEditMode(true);
+                          setWorkTrackingNotice('');
+                          setWorkTrackingError('');
+                        }}
+                        disabled={savingWorkTracking || (!isAdmin && Boolean(measurementBill.work_change_requested_to))}
+                        className="mt-2 min-h-10 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        ✎ কাজের কর্মী Edit
+                      </button>
+                    ) : (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <label className="flex flex-col gap-1 text-xs font-semibold">
+                          কাজ সম্পন্ন করা ব্যক্তি
+                          <select
+                            value={workEditEmployee}
+                            onChange={(event) => setWorkEditEmployee(event.target.value)}
+                            disabled={savingWorkTracking}
+                            className={`${inputClass} text-sm font-normal`}
+                          >
+                            {employeeUsers.map((worker) => (
+                              <option key={worker.user_id} value={worker.user_id}>
+                                {worker.name} ({worker.role === 'admin' ? 'Admin' : 'Employee'})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={submitWorkChange}
+                            disabled={savingWorkTracking || !workEditEmployee || workEditEmployee === measurementBill.work_completed_by}
+                            className="min-h-10 rounded-lg bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {savingWorkTracking ? 'সংরক্ষণ হচ্ছে…' : isAdmin ? 'পরিবর্তন সংরক্ষণ' : 'বর্তমান কর্মীর অনুমতি চান'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWorkEditMode(false)}
+                            disabled={savingWorkTracking}
+                            className="min-h-10 rounded-lg border px-4 py-2 font-semibold"
+                          >
+                            বাতিল
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {workTrackingNotice && <p role="status" className="mt-2 text-sm text-green-600">{workTrackingNotice}</p>}
+                {workTrackingError && (
+                  <p role="alert" className="mt-2 text-sm text-red-500">{workTrackingError}</p>
+                )}
+              </div>
+              {measurementFields.map((field) => (
+                <div key={field} className={`flex justify-between gap-2 rounded border px-3 py-2 ${theme === 'dark' ? 'border-gray-700 bg-gray-700/60' : 'border-gray-200 bg-gray-50'}`}>
+                  <span>{field}</span>
+                  <span className="font-semibold">
+                    {measurementBill.measurements?.[field] ? `${measurementBill.measurements[field]}″` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeDeliveryAlert && (
+        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="delivery-alert-title" className={`${cardClass} w-full max-w-md border rounded-xl p-6 shadow-2xl`}>
+            <h2 id="delivery-alert-title" className="text-xl font-bold mb-3">📅 Delivery Reminder</h2>
+            <p className="mb-2">
+              Delivery for <strong>{activeDeliveryAlert.name}</strong> (Bill #{activeDeliveryAlert.billNo}) is due on:
+            </p>
+            <p className="text-lg font-semibold mb-5">
+              {formatDateDDMMYY(activeDeliveryAlert.delivery_date)}
+            </p>
+            {deliveryAlertError && (
+              <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {deliveryAlertError}
+              </div>
+            )}
+            {showReminderReschedule && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2" htmlFor="delivery-remind-date">
+                  Remind me on another date
+                </label>
+                <input
+                  id="delivery-remind-date"
+                  type="date"
+                  min={tomorrowDateValue}
+                  value={deliveryReminderDate}
+                  onChange={(event) => setDeliveryReminderDate(event.target.value)}
+                  className={`${inputClass} w-full`}
+                />
+                <p className="text-xs opacity-70 mt-1">The reminder will appear again on this date.</p>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => acceptDeliveryAlert(activeDeliveryAlert)}
+                disabled={acceptingDeliveryAlert}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
+              >
+                {acceptingDeliveryAlert ? 'Saving…' : 'Accept'}
+              </button>
+              {showReminderReschedule ? (
+                <button
+                  type="button"
+                  onClick={() => scheduleDeliveryReminder(activeDeliveryAlert)}
+                  disabled={acceptingDeliveryAlert || !deliveryReminderDate}
+                  className="flex-1 py-2.5 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {acceptingDeliveryAlert ? 'Saving…' : 'Save reminder date'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeliveryReminderDate(tomorrowDateValue);
+                    setShowReminderReschedule(true);
+                    setDeliveryAlertError('');
+                  }}
+                  className="flex-1 py-2.5 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700"
+                >
+                  Remind me later
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => dismissDeliveryAlert(activeDeliveryAlert)}
+                disabled={acceptingDeliveryAlert}
+                className="flex-1 py-2.5 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 disabled:opacity-60"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`border-b shadow-sm ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            
-            {/* Left: Greeting & Live Time */}
+
             <div className="text-center md:text-left w-full md:w-auto">
               <div className="flex items-center justify-center md:justify-start gap-2">
                 <span className="text-xl">👋</span>
@@ -516,7 +1420,6 @@ function BillingDashboard({ session, onLogout }) {
               </p>
             </div>
 
-            {/* Right: Search, Theme Toggle, Profile Badge & Logout */}
             <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-3 w-full md:w-auto">
               <div className={`w-full sm:w-52 ${cardClass} border rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-inner`}>
                 <span className="text-gray-400">🔍</span>
@@ -526,17 +1429,15 @@ function BillingDashboard({ session, onLogout }) {
                   className={`w-full outline-none bg-transparent text-sm`} />
               </div>
 
-              {/* Manual Theme Switcher Button */}
               <button onClick={toggleTheme}
                 title="Switch Theme"
                 className={`p-2 rounded-lg ${cardClass} border text-sm font-semibold hover:opacity-80`}>
                 {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
               </button>
 
-              {/* Profile Badge */}
-              <div onClick={() => setShowProfileModal(true)}
+              <div onClick={openProfileModal}
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition hover:opacity-80 ${theme === 'dark' ? 'bg-gray-700/60 border-gray-600' : 'bg-gray-100 border-gray-300'}`}
-                title="Click to manage profile photo">
+                title="Click to manage profile photo and mobile number">
                 <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-gray-300 border border-gray-400">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
@@ -552,7 +1453,6 @@ function BillingDashboard({ session, onLogout }) {
                 </div>
               </div>
 
-              {/* Logout Button with Confirmation Notice */}
               <button onClick={confirmAndLogout}
                 className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 shadow transition-all">
                 Logout ⏏️
@@ -563,15 +1463,14 @@ function BillingDashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* PROFILE PHOTO UPLOAD MODAL */}
       {showProfileModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className={`${cardClass} border rounded-xl max-w-sm w-full p-6 shadow-2xl relative`}>
+          <div className={`${cardClass} border rounded-xl max-w-sm w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto`}>
             <button onClick={() => setShowProfileModal(false)}
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-lg">✕</button>
-            
-            <h3 className="text-lg font-bold mb-4 text-center">🖼️ Profile Photo Settings</h3>
-            
+
+            <h3 className="text-lg font-bold mb-4 text-center">🖼️ Profile Settings</h3>
+
             <div className="flex flex-col items-center justify-center mb-6">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-blue-500 shadow-md mb-3 bg-gray-200 flex items-center justify-center">
                 {avatarUrl ? (
@@ -598,17 +1497,37 @@ function BillingDashboard({ session, onLogout }) {
                   🗑️ Remove Current Photo
                 </button>
               )}
-
-              <button onClick={() => setShowProfileModal(false)}
-                className={`w-full py-2 rounded-lg font-medium text-sm border ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
-                Close
-              </button>
             </div>
+
+            <div className={`mt-6 pt-4 border-t ${theme === 'dark' ? 'border-gray-600' : 'border-gray-200'}`}>
+              <p className="text-sm font-semibold mb-1">📱 My Mobile Number</p>
+              <p className="text-xs opacity-70 mb-2">
+                {currentPhone
+                  ? `Saved: +91 ${currentPhone}`
+                  : 'Not set yet. Forgot Password OTP er jonno eta lagbe.'}
+              </p>
+              <div className="flex items-center">
+                <span className={`px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-200 text-gray-700 border-gray-300'} border rounded-l font-semibold text-sm`}>+91</span>
+                <input type="text" value={phoneInput} placeholder="10-digit number" maxLength="10"
+                  onChange={(e) => setPhoneInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                  className={`${inputClass} rounded-l-none flex-1 text-sm`} />
+              </div>
+              <button onClick={savePhone}
+                className="mt-2 w-full py-2 bg-teal-600 text-white rounded-lg font-medium text-sm hover:bg-teal-700 shadow">
+                Save Number
+              </button>
+              {phoneError && <p className="mt-2 text-xs text-red-500">{phoneError}</p>}
+              {phoneNotice && <p className="mt-2 text-xs text-green-500">{phoneNotice}</p>}
+            </div>
+
+            <button onClick={() => setShowProfileModal(false)}
+              className={`mt-6 w-full py-2 rounded-lg font-medium text-sm border ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>
+              Close
+            </button>
           </div>
         </div>
       )}
 
-      {/* MAIN CONTAINER */}
       <div className="w-full max-w-7xl mx-auto px-2 sm:px-6 py-6 flex-grow">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{error}</div>
@@ -621,10 +1540,19 @@ function BillingDashboard({ session, onLogout }) {
           </button>
 
           {isAdmin && (
-            <button onClick={() => setShowUsers(!showUsers)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm shadow">
-              {showUsers ? '✕ Close Users' : '👥 Manage Users'}
-            </button>
+            <>
+              <button onClick={() => setShowUsers(!showUsers)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm shadow">
+                {showUsers ? '✕ Close Users' : '👥 Manage Users'}
+              </button>
+              <button
+                type="button"
+                onClick={openWorkStats}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium text-sm shadow"
+              >
+                📊 কাজের হিসাব
+              </button>
+            </>
           )}
         </div>
 
@@ -636,30 +1564,161 @@ function BillingDashboard({ session, onLogout }) {
         {showForm && (
           <div className={`${cardClass} border rounded-lg p-4 sm:p-6 mb-6 shadow-md`}>
             <h2 className="text-lg font-bold mb-4">{editingId ? 'Edit Bill' : 'Add New Bill'}</h2>
-            
+
             {formError && (
               <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</div>
             )}
-            
+
             <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <input type="text" placeholder="Customer Name (letters only)" required value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value.replace(/[^a-zA-Z\s]/g, '') })} className={inputClass} />
               <div className="flex items-center">
                 <span className={`px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-200 text-gray-700 border-gray-300'} border rounded-l font-semibold text-sm`}>+91</span>
                 <input type="text" placeholder="10-digit phone" required value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })} 
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
                   className={`${inputClass} rounded-l-none flex-1`} maxLength="10" />
               </div>
-              <input type="text" placeholder="Bill No" value={formData.billNo}
+              <input type="text" placeholder="Bill No (auto-filled; editable)" value={formData.billNo}
                 onChange={(e) => setFormData({ ...formData, billNo: e.target.value })} className={inputClass} />
-              <input type="text" placeholder="Order Track" value={formData.orderTrack}
-                onChange={(e) => setFormData({ ...formData, orderTrack: e.target.value })} className={inputClass} />
-              <input type="text" placeholder="Item" value={formData.item}
-                onChange={(e) => setFormData({ ...formData, item: e.target.value })} className={inputClass} />
-              <input type="number" placeholder="Total Amount (₹)" value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className={inputClass} />
-              <input type="number" placeholder="Advance Payment (₹)" value={formData.down}
-                onChange={(e) => setFormData({ ...formData, down: e.target.value })} className={inputClass} />
+              <label className="flex flex-col gap-1 text-sm font-medium">
+                Delivery Date (DD-MM-YY)
+                <input
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  maxLength={8}
+                  pattern="[0-9]{2}-[0-9]{2}-[0-9]{2}"
+                  title="দিন-মাস-বছর লিখুন, যেমন 25-12-26"
+                  placeholder="DD-MM-YY"
+                  value={formData.deliveryDate}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const deliveryDate = digits.length > 4
+                      ? `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`
+                      : digits.length > 2
+                        ? `${digits.slice(0, 2)}-${digits.slice(2)}`
+                        : digits;
+                    setFormData({ ...formData, deliveryDate });
+                  }}
+                  className={inputClass}
+                />
+                <span className="text-xs opacity-70">দিন-মাস-বছর লিখুন; যেমন 25-12-26। ভুল তারিখ গ্রহণ করা হবে না।</span>
+              </label>
+              <div ref={itemPickerRef} className={`col-span-full sm:col-span-2 relative ${showItemOptions ? 'z-20' : ''}`}>
+                <label className="block text-sm font-medium mb-2">Item (Qty)</label>
+                <button
+                  type="button"
+                  onClick={() => setShowItemOptions(!showItemOptions)}
+                  aria-expanded={showItemOptions}
+                  className={`${inputClass} w-full flex items-center justify-between text-left`}
+                >
+                  <span className={formData.item ? '' : 'text-gray-400'}>
+                    {formData.item || 'Tap to select items and enter quantities'}
+                  </span>
+                  <span aria-hidden="true">{showItemOptions ? '▲' : '▼'}</span>
+                </button>
+                {showItemOptions && (
+                  <div className={`absolute left-0 right-0 top-full z-30 max-h-48 overflow-y-auto rounded border p-2 shadow-xl ${theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'}`}>
+                    <div className="space-y-2">
+                      {itemOptions.map((item) => {
+                        const qty = Number(itemQuantities[item] || 0);
+                        const checked = selectedItemOptions.includes(item);
+
+                        return (
+                          <div key={item} className={`flex items-center gap-2 px-3 py-2 border rounded ${theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
+                            <label className="flex items-center gap-2 flex-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleItemOption(item)}
+                                className="h-4 w-4 accent-blue-600"
+                              />
+                              <span className="text-sm">{item}</span>
+                            </label>
+                            {checked && (
+                              <input
+                                type="number"
+                                min="1"
+                                inputMode="numeric"
+                                aria-label={`${item} quantity`}
+                                value={qty}
+                                onChange={(e) => updateItemQuantity(item, e.target.value)}
+                                className={`${theme === 'dark' ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} w-16 px-2 py-1 border rounded text-center`}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div ref={measurementPickerRef} className={`col-span-full sm:col-span-2 relative ${showMeasurementOptions ? 'z-20' : ''}`}>
+                <button
+                  type="button"
+                  onClick={() => setShowMeasurementOptions(!showMeasurementOptions)}
+                  aria-expanded={showMeasurementOptions}
+                  className={`${inputClass} w-full flex items-center justify-between text-left font-medium`}
+                >
+                  <span>পোশাকের মাপ (ইঞ্চি)</span>
+                  <span aria-hidden="true">{showMeasurementOptions ? '▲' : '▼'}</span>
+                </button>
+                {showMeasurementOptions && (
+                  <div className={`absolute left-0 right-0 top-full z-30 max-h-64 overflow-y-auto rounded border p-3 shadow-xl ${theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'}`}>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {measurementFields.map((field) => (
+                        <label key={field} className="flex flex-col gap-1 text-sm">
+                          {field}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength="40"
+                              placeholder="যেমন: 14 বা 14½"
+                              value={formData.measurements[field]}
+                              onChange={(event) => setFormData({
+                                ...formData,
+                                measurements: { ...formData.measurements, [field]: event.target.value },
+                              })}
+                              className={`${inputClass} min-w-0 flex-1`}
+                            />
+                            <button
+                              type="button"
+                              aria-label={`${field} মাপে 1/2 যোগ করুন`}
+                              title="1/2 যোগ করুন"
+                              disabled={formData.measurements[field].endsWith('½') || formData.measurements[field].length >= 40}
+                              onClick={() => {
+                                const currentValue = formData.measurements[field];
+                                if (currentValue.endsWith('½')) return;
+                                setFormData({
+                                  ...formData,
+                                  measurements: { ...formData.measurements, [field]: `${currentValue}½` },
+                                });
+                              }}
+                              className={`rounded border px-3 font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${theme === 'dark' ? 'border-gray-600 bg-gray-700 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 hover:bg-gray-200'}`}
+                            >
+                              1/2
+                            </button>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <input type="number" min="0" step="0.01" placeholder="Total Amount (₹)" value={formData.amount}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0)) {
+                    setFormData({ ...formData, amount: value });
+                  }
+                }} className={inputClass} />
+              <input type="number" min="0" step="0.01" placeholder="Advance Payment (₹)" value={formData.down}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0)) {
+                    setFormData({ ...formData, down: value });
+                  }
+                }} className={inputClass} />
               <button type="submit"
                 className="px-4 py-2.5 bg-green-600 text-white rounded hover:bg-green-700 font-medium col-span-1 sm:col-span-2 shadow">
                 {editingId ? '✓ Update Bill' : '✓ Save Bill'}
@@ -668,7 +1727,6 @@ function BillingDashboard({ session, onLogout }) {
           </div>
         )}
 
-        {/* BILLS TABLE SECTION */}
         <div className={`${cardClass} border rounded-lg overflow-hidden shadow-sm`}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm whitespace-nowrap">
@@ -677,33 +1735,71 @@ function BillingDashboard({ session, onLogout }) {
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Name</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Phone</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Bill No</th>
-                  <th className="px-3 sm:px-4 py-3 text-left font-semibold">Order Track</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Item</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Amount</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Advance</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Pending</th>
-                  <th className="px-3 sm:px-4 py-3 text-left font-semibold">Created By</th>
+                  <th className="px-3 sm:px-4 py-3 text-left font-semibold">Delivery Date</th>
+                  <th className="px-3 sm:px-4 py-3 text-left font-semibold">Bill তৈরি করেছেন</th>
+                  <th className="px-3 sm:px-4 py-3 text-left font-semibold">কাজ সম্পন্ন করেছেন</th>
                   <th className="px-3 sm:px-4 py-3 text-left font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
                 {filteredBills.length > 0 ? filteredBills.map((bill) => (
                   <tr key={bill.id} className={theme === 'dark' ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}>
-                    <td className="px-3 sm:px-4 py-3">{bill.name}</td>
+                    <td className="px-3 sm:px-4 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setMeasurementBill(bill)}
+                          className="font-medium text-blue-500 hover:underline"
+                          title="View garment measurements"
+                        >
+                          {bill.name}
+                        </button>
+                        <span className="text-xs opacity-70">{formatDateDDMMYY(bill.created_at)}</span>
+                      </div>
+                    </td>
                     <td className="px-3 sm:px-4 py-3 font-mono">+{bill.phone}</td>
                     <td className="px-3 sm:px-4 py-3 font-semibold">{bill.billNo}</td>
-                    <td className="px-3 sm:px-4 py-3">{bill.orderTrack}</td>
                     <td className="px-3 sm:px-4 py-3">{bill.item}</td>
                     <td className="px-3 sm:px-4 py-3 font-semibold">₹{bill.amount}</td>
                     <td className="px-3 sm:px-4 py-3 text-green-500">₹{bill.down}</td>
                     <td className="px-3 sm:px-4 py-3 text-red-500 font-semibold">₹{bill.pending}</td>
-                    <td className="px-3 sm:px-4 py-3 text-xs opacity-70">{bill.created_by || '—'}</td>
+                    <td className="px-3 sm:px-4 py-3">
+                      {formatDateDDMMYY(bill.delivery_date)}
+                    </td>
+                    <td className="px-3 sm:px-4 py-3">{bill.created_by_name || bill.created_by || '—'}</td>
+                    <td className="px-3 sm:px-4 py-3">
+                      {bill.work_completed_by_name
+                        ? <span title={bill.work_completed_at ? new Date(bill.work_completed_at).toLocaleString() : ''}>{bill.work_completed_by_name}</span>
+                        : 'অপেক্ষায়'}
+                    </td>
                     <td className="px-3 sm:px-4 py-3">
                       <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setMeasurementBill(bill)}
+                          aria-label={`${bill.name} এর মাপ দেখুন`}
+                          className="min-h-11 min-w-16 px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 text-sm sm:text-base font-bold shadow-md ring-2 ring-purple-300/70 transition focus:outline-none focus:ring-4 focus:ring-purple-400"
+                        >
+                          মাপ
+                        </button>
+                        {!bill.work_completed_by && (
+                          <button
+                            type="button"
+                            onClick={() => markWorkComplete(bill)}
+                            disabled={savingWorkTracking}
+                            className="min-h-10 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                          >
+                            কাজ সম্পন্ন
+                          </button>
+                        )}
                         <button onClick={() => handleEdit(bill)}
                           className="px-2.5 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs">Edit</button>
                         <button onClick={() => sendWhatsApp(bill)}
-                          className="px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs">💬 WA</button>
+                          className="px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs">WhatsApp</button>
                         {isAdmin && (
                           <button onClick={() => handleDelete(bill.id)}
                             className="px-2.5 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs">Delete</button>
@@ -712,7 +1808,7 @@ function BillingDashboard({ session, onLogout }) {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={10} className="px-6 py-8 text-center text-gray-400">
+                  <tr><td colSpan={11} className="px-6 py-8 text-center text-gray-400">
                     No bills found. Start by adding a new bill!
                   </td></tr>
                 )}
@@ -721,7 +1817,6 @@ function BillingDashboard({ session, onLogout }) {
           </div>
         </div>
 
-        {/* STATS CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
           <div className={`${cardClass} border rounded-lg p-4 text-center shadow-sm`}>
             <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Total Bills</p>
@@ -738,15 +1833,12 @@ function BillingDashboard({ session, onLogout }) {
         </div>
       </div>
 
-      {/* FOOTER WITH DISCLAIMER */}
       <DisclaimerFooter theme={theme} />
     </div>
   );
 }
 
-/* ============================================================
-   APP — GATE (login → dashboard)
-   ============================================================ */
+
 function App() {
   const [session, setSession]   = useState(() => {
     try {

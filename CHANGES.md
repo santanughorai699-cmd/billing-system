@@ -4,10 +4,8 @@
 
 ### 1. Database Setup ✅
 ```python
-# NEW: SQLite Database initialization
 init_db()  # Creates tables for users, bills, sessions
 
-# Tables Created:
 - users      (user_id, password, name, role)
 - bills      (id, name, phone, billNo, orderTrack, item, amount, down, pending, created_by, created_at)
 - sessions   (token, user_id, created_at)
@@ -15,7 +13,6 @@ init_db()  # Creates tables for users, bills, sessions
 
 ### 2. Validation Functions ✅
 ```python
-# NEW: Input validation helpers
 def is_valid_name(name: str) -> bool:
     """Only alphabets and spaces allowed"""
     return bool(re.match(r"^[a-zA-Z\s]+$", name.strip()))
@@ -36,7 +33,6 @@ def format_phone_with_country_code(phone: str) -> str:
 
 ### 3. Data Models with Validation ✅
 ```python
-# MODIFIED: Added validators to Pydantic models
 class BillInput(BaseModel):
     name: str
     phone: str
@@ -61,13 +57,10 @@ class UserCreate(BaseModel):
 
 ### 4. Database Persistence ✅
 ```python
-# REPLACED: In-memory storage with database queries
 
-# Old way (lost on restart):
 users_db = {...}  # Python dictionary
 bills_db = [...]  # Python list
 
-# New way (persistent):
 conn = sqlite3.connect(DB_PATH)  # Read/write from database
 c = conn.cursor()
 c.execute("SELECT * FROM bills")  # Query data
@@ -76,7 +69,6 @@ conn.commit()  # Save changes
 
 ### 5. All Endpoints Updated ✅
 ```python
-# Pattern for all endpoints:
 
 @app.get("/api/bills")
 def get_bills(user_id: str = Depends(current_user)):
@@ -95,7 +87,6 @@ def get_bills(user_id: str = Depends(current_user)):
 
 ### 1. Input Validation Functions ✅
 ```javascript
-// NEW: Frontend validation helpers
 const validateName = (name) => /^[a-zA-Z\s]*$/.test(name);
 const validateUserId = (userId) => /^[a-zA-Z]*$/.test(userId);
 const validatePhone = (phone) => /^[0-9]*$/.test(phone) && phone.length <= 10;
@@ -103,7 +94,6 @@ const validatePhone = (phone) => /^[0-9]*$/.test(phone) && phone.length <= 10;
 
 ### 2. Real-Time Input Filtering ✅
 ```javascript
-// MODIFIED: Name input - blocks non-letters
 <input 
   value={formData.name}
   onChange={(e) => setFormData({ 
@@ -112,13 +102,11 @@ const validatePhone = (phone) => /^[0-9]*$/.test(phone) && phone.length <= 10;
   })} 
 />
 
-// User ID input - blocks non-letters
 <input 
   value={userId}
   onChange={(e) => setUserId(e.target.value.replace(/[^a-zA-Z]/g, ''))}  // Only letters
 />
 
-// Phone input - blocks non-digits and limits to 10
 <input 
   placeholder="10-digit phone"
   value={formData.phone}
@@ -131,19 +119,15 @@ const validatePhone = (phone) => /^[0-9]*$/.test(phone) && phone.length <= 10;
 
 ### 3. Country Code Display ✅
 ```javascript
-// NEW: Display +91 prefix for phone numbers
 <span>+91</span>
 <input type="text" placeholder="10-digit phone" />
 
-// Displays as: +91 9876543210
 
-// On edit, remove prefix:
 const phoneWithoutCode = bill.phone.replace(/^91/, '');
 ```
 
 ### 4. Enhanced Form Validation ✅
 ```javascript
-// NEW: Form-level validation before API call
 const handleSave = async (e) => {
   e.preventDefault();
   
@@ -156,18 +140,14 @@ const handleSave = async (e) => {
     return;
   }
   
-  // Only proceed if validation passes
   await request('/api/bills', { method: 'POST', body: payload });
 };
 ```
 
 ### 5. Auto-Save Confirmation ✅
 ```javascript
-// MODIFIED: Clear feedback that bill was saved
 "Bill is saved to database automatically!"
 
-// Changed button text from "Save Bill" to "✓ Save Bill"
-// Changed to "✓ Update Bill" for edits
 ```
 
 ---
@@ -214,9 +194,6 @@ SERVER RESTART
 
 ### Layer 1: Frontend (Immediate Feedback)
 ```javascript
-// User types "John123"
-// Instantly removes "123" to show "John"
-// Real-time as user types
 ```
 
 ### Layer 2: Backend (Security)
