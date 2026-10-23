@@ -35,6 +35,7 @@ const MAX_LOGIN_ATTEMPTS = 5;
 const WAF_STRIKE_LIMIT = 5;
 const IP_BAN_DURATION = 1800;
 const SESSION_TTL_HOURS = 24;
+const WORK_ACTIVITY_RETENTION_HOURS = 24;
 const PBKDF2_ITERATIONS = 260_000;
 const MEASUREMENT_FIELDS = ["ঝুল", "ছাতি", "কোমর", "পুট", "হাতা", "মহরী", "মহড়া", "পে", "কছ"];
 
@@ -363,6 +364,17 @@ async function recordWorkActivity(eventType, actorName, customerName, billNo, pr
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [eventType, actorName, customerName, billNo, previousWorkerName, targetWorkerName, new Date().toISOString()]
   );
+}
+
+async function recordUserActivity(req, eventType, subject, detail = "") {
+  const [actor] = await query("SELECT name FROM users WHERE user_id = ?", [req.userId]);
+  if (!actor) throw new HttpError(401, "User not found");
+  await recordWorkActivity(eventType, actor.name, subject, "", null, detail || subject);
+}
+
+async function deleteExpiredWorkActivity() {
+  const cutoff = new Date(Date.now() - WORK_ACTIVITY_RETENTION_HOURS * 60 * 60 * 1000).toISOString();
+  await query("DELETE FROM work_activity WHERE created_at < ?", [cutoff]);
 }
 
 async function withTransaction(work) {
@@ -790,6 +802,7 @@ app.post("/api/bills", requireAuth, validate(BillInput), async (req, res) => {
       JSON.stringify(bill.measurements),
     ]
   );
+  await recordUserActivity(req, "bill_created", bill.name, `Bill #${bill.billNo}`);
 
   res.json({
     id: row.id,
@@ -830,6 +843,7 @@ app.put("/api/bills/:id", requireAuth, validate(BillInput), async (req, res) => 
      WHERE id = ?`,
     [bill.name, bill.phone, bill.billNo, bill.orderTrack, bill.item, bill.amount, bill.down, pending, deliveryDate, deliveryAlertAccepted, deliveryRemindOn, JSON.stringify(bill.measurements), billId]
   );
+  await recordUserActivity(req, "bill_updated", bill.name, `Bill #${bill.billNo}`);
 
   res.json({
     id: billId,
@@ -852,9 +866,10 @@ app.put("/api/bills/:id", requireAuth, validate(BillInput), async (req, res) => 
 
 app.post("/api/bills/:id/delivery-alert/accept", requireAuth, async (req, res) => {
   const billId = parseId(req.params.id);
-  const [existing] = await query("SELECT id FROM bills WHERE id = ?", [billId]);
+  const [existing] = await query("SELECT id, name, billNo FROM bills WHERE id = ?", [billId]);
   if (!existing) throw new HttpError(404, "Bill not found");
   await query("UPDATE bills SET delivery_alert_accepted = 1, delivery_remind_on = NULL WHERE id = ?", [billId]);
+  await recordUserActivity(req, "delivery_reminder_accepted", existing.name, `Bill #${existing.billNo}`);
   res.json({ message: "Delivery alert accepted" });
 });
 
@@ -1067,10 +1082,12 @@ app.post("/api/bills/:id/work-change-response", requireAuth, validate(WorkChange
 });
 
 app.get("/api/work-activity", requireAuth, async (_req, res) => {
+  const cutoff = new Date(Date.now() - WORK_ACTIVITY_RETENTION_HOURS * 60 * 60 * 1000).toISOString();
   const rows = await query(
     `SELECT id, event_type, actor_name, customer_name, bill_no, previous_worker_name,
             target_worker_name, created_at
-     FROM work_activity ORDER BY id DESC LIMIT 50`
+     FROM work_activity WHERE created_at >= ? ORDER BY id DESC LIMIT 50`,
+    [cutoff]
   );
   res.json(rows);
 });
@@ -1100,15 +1117,19 @@ app.get("/api/work-stats", requireAuth, requireAdmin, async (req, res) => {
 
 app.post("/api/bills/:id/delivery-alert/remind", requireAuth, validate(DeliveryReminderInput), async (req, res) => {
   const billId = parseId(req.params.id);
-  const [existing] = await query("SELECT id FROM bills WHERE id = ?", [billId]);
+  const [existing] = await query("SELECT id, name, billNo FROM bills WHERE id = ?", [billId]);
   if (!existing) throw new HttpError(404, "Bill not found");
   await query("UPDATE bills SET delivery_remind_on = ? WHERE id = ?", [req.body.remindOn, billId]);
+  await recordUserActivity(req, "delivery_reminder_rescheduled", existing.name, `Bill #${existing.billNo}`);
   res.json({ message: "Delivery reminder rescheduled", delivery_remind_on: req.body.remindOn });
 });
 
 app.delete("/api/bills/:id", requireAuth, requireAdmin, async (req, res) => {
   const billId = parseId(req.params.id);
+  const [bill] = await query("SELECT name, billNo FROM bills WHERE id = ?", [billId]);
+  if (!bill) throw new HttpError(404, "Bill not found");
   await query("DELETE FROM bills WHERE id = ?", [billId]);
+  await recordUserActivity(req, "bill_deleted", bill.name, `Bill #${bill.billNo}`);
   res.json({ message: "Bill deleted" });
 });
 
@@ -1133,6 +1154,7 @@ app.post("/api/users", requireAuth, requireAdmin, validate(UserCreate), async (r
     data.role,
     data.phone,
   ]);
+  await recordUserActivity(req, "user_created", data.name || data.user_id, `${data.role} account · ${data.user_id}`);
 
   res.json({ message: `User ${data.user_id} created` });
 });
@@ -1146,6 +1168,7 @@ app.put("/api/users/:user_id", requireAuth, requireAdmin, validate(RoleUpdate), 
   if (!existing) throw new HttpError(404, "User not found");
 
   await query("UPDATE users SET role = ? WHERE user_id = ?", [role, userId]);
+  await recordUserActivity(req, "user_role_updated", userId, `Role: ${role}`);
   res.json({ message: `Role updated for ${userId}` });
 });
 
@@ -1164,6 +1187,7 @@ app.put(
       await tx("UPDATE users SET password = ? WHERE user_id = ?", [hash, userId]);
       await tx("DELETE FROM sessions WHERE user_id = ?", [userId]);
     });
+    await recordUserActivity(req, "user_password_updated", userId, "Password reset");
 
     res.json({ message: `Password updated and active sessions revoked for ${userId}` });
   }
@@ -1180,6 +1204,7 @@ app.delete("/api/users/:user_id", requireAuth, requireAdmin, async (req, res) =>
     await tx("DELETE FROM users WHERE user_id = ?", [userId]);
     await tx("DELETE FROM sessions WHERE user_id = ?", [userId]);
   });
+  await recordUserActivity(req, "user_deleted", userId, "Account deleted");
 
   res.json({ message: `User ${userId} deleted` });
 });
@@ -1312,10 +1337,11 @@ app.put("/api/users/:user_id/phone", requireAuth, validate(PhoneUpdate), async (
     }
   }
 
-  const [existing] = await query("SELECT user_id FROM users WHERE user_id = ?", [userId]);
+  const [existing] = await query("SELECT user_id, name FROM users WHERE user_id = ?", [userId]);
   if (!existing) throw new HttpError(404, "User not found");
 
   await query("UPDATE users SET phone = ? WHERE user_id = ?", [req.body.phone, userId]);
+  await recordUserActivity(req, "user_phone_updated", existing.name, `Mobile updated · ${userId}`);
   res.json({ message: "Mobile number updated" });
 });
 
@@ -1360,6 +1386,13 @@ app.use((err, req, res, next) => {
 async function start() {
   connectDatabase();
   await initDatabase();
+  await deleteExpiredWorkActivity();
+  const workActivityCleanupTimer = setInterval(() => {
+    deleteExpiredWorkActivity().catch((err) => {
+      log.error(`Failed to delete expired work notifications: ${err.message}`);
+    });
+  }, 5 * 60 * 1000);
+  workActivityCleanupTimer.unref();
 
   const PORT = Number(process.env.PORT) || 8000;
   app.listen(PORT, "0.0.0.0", () => {
