@@ -568,7 +568,12 @@ const BillInput = z.object({
       "Phone must be a valid 10-digit Indian mobile number"
     )
     .transform((v) => "91" + normalizePhoneDigits(v).slice(-10)),
-  billNo: z.string().min(1).max(50).transform((v) => sanitizeText(v, 150)),
+  // Bill No: trim korar pore khali hole reject korbe (shudhu space diye save hoy na)
+  billNo: z
+    .string()
+    .max(50)
+    .transform((v) => sanitizeText(v, 150))
+    .refine((v) => v.length > 0, "Bill No is required"),
   orderTrack: z.string().max(100).default("").transform((v) => sanitizeText(v, 150)),
   item: z.string().min(1).max(150).transform((v) => sanitizeText(v, 150)),
   deliveryDate: z.string().length(10).refine((value) => {
@@ -763,7 +768,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
 
 app.get("/api/bills", requireAuth, async (req, res) => {
   const rows = await query(
-    `SELECT bills.id, bills.name, bills.phone, bills.billNo, bills.orderTrack, bills.item, bills.amount, bills.down, bills.pending,
+    `SELECT bills.id, bills.name, bills.phone, bills.billNo AS "billNo", bills.orderTrack, bills.item, bills.amount, bills.down, bills.pending,
             bills.created_at, bills.created_by, COALESCE(creator.name, bills.created_by) AS created_by_name,
             bills.work_completed_by, worker.name AS work_completed_by_name, worker.role AS work_completed_by_role, bills.work_completed_at,
             bills.work_change_requested_by, requester.name AS work_change_requested_by_name,

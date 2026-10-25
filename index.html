@@ -1263,7 +1263,7 @@ function BillingDashboard({ session, onLogout }) {
     setSelectedItemOptions(itemOptions.filter((item) => quantities[item] > 0));
     setShowItemOptions(true);
     setFormData({
-      name: bill.name, phone: phoneWithoutCode, billNo: bill.billNo,
+      name: bill.name, phone: phoneWithoutCode, billNo: bill.billNo || '',
       item: bill.item, deliveryDate: bill.delivery_date ? formatDateDDMMYY(bill.delivery_date) : '',
       measurements: Object.fromEntries(measurementFields.map((field) => [field, bill.measurements?.[field] || ''])),
       amount: bill.amount.toString(), down: bill.down.toString(),
@@ -1285,7 +1285,9 @@ function BillingDashboard({ session, onLogout }) {
       setFormError('Phone must be 10 digits (India only)');
       return;
     }
-    if (!formData.billNo) {
+    // Bill No: space diye save hole trim hoye khali hoy, tai trim kore check kori
+    const billNo = formData.billNo.trim();
+    if (!billNo) {
       setFormError('Bill No is required');
       return;
     }
@@ -1297,13 +1299,14 @@ function BillingDashboard({ session, onLogout }) {
 
     const payload = {
       ...formData,
+      billNo,
       deliveryDate,
       amount: parseFloat(formData.amount) || 0,
       down: parseFloat(formData.down) || 0,
     };
     requestConfirmation(
       editingId ? 'Update this bill?' : 'Create this bill?',
-      `${formData.name} · Bill #${formData.billNo} will be ${editingId ? 'updated' : 'created'}.`,
+      `${formData.name} · Bill #${billNo} will be ${editingId ? 'updated' : 'created'}.`,
       () => saveBillConfirmed(payload),
       editingId ? 'Update Bill' : 'Create Bill'
     );
@@ -2025,7 +2028,7 @@ function BillingDashboard({ session, onLogout }) {
               </div>
               <label className="flex flex-col gap-1 text-sm font-medium">
                 Bill Number
-                <input type="text" value={formData.billNo}
+                <input type="text" required maxLength={50} value={formData.billNo}
                   onChange={(e) => setFormData({ ...formData, billNo: e.target.value })} className={`${inputClass} w-full sm:max-w-48`} />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium">
@@ -2210,7 +2213,7 @@ function BillingDashboard({ session, onLogout }) {
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 py-3 font-mono">+{bill.phone}</td>
-                    <td className="px-3 sm:px-4 py-3 font-semibold">{bill.billNo}</td>
+                    <td className="px-3 sm:px-4 py-3 font-semibold">{bill.billNo || '—'}</td>
                     <td className="px-3 sm:px-4 py-3">{bill.item}</td>
                     <td className="px-3 sm:px-4 py-3 font-semibold">₹{bill.amount}</td>
                     <td className="px-3 sm:px-4 py-3 text-green-500">₹{bill.down}</td>

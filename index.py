@@ -738,7 +738,7 @@ def get_bills(user_id: str = Depends(current_user)):
     with db_session() as (conn, c, db_type):
         execute(
             c, db_type,
-            """SELECT bills.id, bills.name, bills.phone, bills.billNo, bills.orderTrack, bills.item, bills.amount, bills.down, bills.pending,
+            """SELECT bills.id, bills.name, bills.phone, bills.billNo AS "billNo", bills.orderTrack, bills.item, bills.amount, bills.down, bills.pending,
                       bills.created_at, bills.created_by, COALESCE(creator.name, bills.created_by) AS created_by_name,
                       bills.work_completed_by, worker.name AS work_completed_by_name, worker.role AS work_completed_by_role, bills.work_completed_at,
                       bills.work_change_requested_by, requester.name AS work_change_requested_by_name,
